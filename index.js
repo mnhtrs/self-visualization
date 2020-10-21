@@ -80,7 +80,7 @@ client.on('message', async message => {
 				fav_film = 'Tom And Jerry,\nBalika Vadhu.';
 				fav_anime = 'Dragon Ball';
 			} else if(id === '673863035991097347'){
-				birthday = '06/09/2006';
+				birthday = '06/09/????';
 				country = country[0];
 				favs = '📺 Watching TV';
 				fav_col = '⬛ Black\n⬜  White';
