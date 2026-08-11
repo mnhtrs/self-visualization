@@ -1,0 +1,1781 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C++ · Truyền dữ liệu vào hàm — Neon Code Film</title>
+<style>
+  :root{
+    --bg:#020617; --panel:#0b1120;
+    --cyan:#22d3ee; --mag:#f472b6; --amber:#fbbf24; --violet:#a78bfa; --green:#34d399;
+    --ink:#e6edf7; --dim:#8b98ac; --faint:#5b6678;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:#0a1330;color:var(--ink);overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;user-select:none}
+  #cv{position:fixed;inset:0;display:block}
+  body[data-state="play"].idle{cursor:none}
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:3;
+    background:radial-gradient(120% 90% at 56% 46%, transparent 56%, rgba(1,3,10,.55) 100%)}
+
+  /* ============ CODE PANEL — nền panel, viền cyan glow, typing ============ */
+  #codebox{
+    position:fixed;left:3.6vw;top:44%;transform:translateY(-50%);z-index:5;
+    font-family:var(--mono);font-size:clamp(13px,1.42vw,17.5px);line-height:1.92;
+    padding:22px 30px;border-radius:16px;min-width:320px;max-height:72vh;overflow:hidden;
+    background:rgba(11,17,32,.87);
+    border:1px solid rgba(34,211,238,.32);
+    box-shadow:0 0 0 1px rgba(34,211,238,.06) inset,0 0 34px rgba(34,211,238,.10),0 18px 60px rgba(0,0,0,.5);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    opacity:0;pointer-events:none;transition:opacity .6s ease,transform .6s ease;
+  }
+  #codebox.show{opacity:1;pointer-events:auto}
+  #codebox .cb-tag{
+    font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    font-size:10.5px;letter-spacing:.34em;color:#7e8fa8;font-weight:600;margin-bottom:10px;
+    display:flex;align-items:center;gap:8px}
+  #codebox .cb-tag::before{content:"";width:7px;height:7px;border-radius:50%;
+    background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+  #codebox .ln{
+    white-space:pre;color:#dbe5f2;opacity:0;border-radius:7px;
+    padding:0 10px 0 12px;margin-left:-14px;border-left:2px solid transparent;
+    transition:opacity .45s,background .45s,border-color .45s,transform .45s,color .45s,box-shadow .45s;
+    overflow:hidden;max-width:60ch;
+  }
+  #codebox .ln.typed{opacity:.64}
+  #codebox.typing .ln{opacity:0;animation:typein .55s steps(var(--n)) forwards;animation-delay:var(--d)}
+  @keyframes typein{from{max-width:0;opacity:.64}to{max-width:calc(var(--n)*1ch + 24px);opacity:.64}}
+  #codebox .ln.blank{opacity:.25}
+  #codebox .ln.jump{cursor:pointer}
+  #codebox .ln.jump:hover{opacity:.9;background:rgba(34,211,238,.06)}
+  #codebox .ln.done{opacity:.76}
+  #codebox .ln.on{
+    opacity:1 !important;color:#fff;transform:translateX(5px);
+    border-left-color:var(--cyan);
+    background:linear-gradient(90deg,rgba(34,211,238,.14),rgba(34,211,238,.02) 75%,transparent);
+    text-shadow:0 0 16px rgba(34,211,238,.55);
+    box-shadow:0 0 18px rgba(34,211,238,.08) inset;
+  }
+  #codebox .k{color:#7dd3fc}
+  #codebox .n{color:var(--amber);text-shadow:0 0 10px rgba(251,191,36,.35)}
+  #codebox .amp{color:var(--mag);font-weight:700}
+  #codebox .cmt{color:#5f7089;font-style:italic}
+  #codebox.rebuild .amp{animation:ampf 1.7s ease .15s 2}
+  @keyframes ampf{0%,100%{text-shadow:none}50%{text-shadow:0 0 20px rgba(244,114,182,.95);color:#ffd3ea}}
+  @media (max-width:900px){#codebox{font-size:12.5px;min-width:0;max-width:52vw;padding:14px 18px}}
+
+  /* ============ caption — pill glassmorphism ============ */
+  #sub{position:fixed;left:50%;bottom:3.4vh;transform:translateX(-50%) translateY(12px);
+    z-index:5;max-width:86vw;text-align:center;pointer-events:none;
+    opacity:0;transition:opacity .5s ease,transform .5s ease}
+  #sub .pill{display:inline-block;
+    font-size:clamp(16px,1.9vw,23px);font-weight:500;letter-spacing:.015em;line-height:1.5;
+    color:#f4f8fd;padding:14px 30px;border-radius:999px;
+    background:rgba(11,17,32,.8);
+    border:1px solid rgba(255,255,255,.17);
+    box-shadow:0 0 26px rgba(34,211,238,.07),0 10px 40px rgba(0,0,0,.5);
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  #sub.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #sub code{font-family:var(--mono);font-size:.85em;background:rgba(34,211,238,.12);
+    padding:.06em .42em;border-radius:6px;color:#a5ecff;border:1px solid rgba(34,211,238,.18)}
+
+  /* ============ chapter card — reveal ký tự + gạch chân quét ============ */
+  #chcard{position:fixed;left:50%;top:15vh;transform:translateX(-50%);z-index:7;
+    text-align:center;pointer-events:none;opacity:0;transition:opacity .45s}
+  #chcard.show{opacity:1}
+  #chcard .pre{font-size:11px;letter-spacing:.5em;color:var(--dim);font-weight:600;margin-bottom:14px;opacity:0}
+  #chcard.show .pre{animation:fadein .5s ease forwards}
+  #chcard .big{font-size:clamp(26px,4.6vw,46px);font-weight:720;letter-spacing:.16em;
+    color:#eaf2fb;text-shadow:0 0 30px rgba(34,211,238,.35)}
+  #chcard .big span{display:inline-block;opacity:0;transform:translateY(20px) scale(.5)}
+  #chcard.show .big span{animation:chin .58s cubic-bezier(.34,1.56,.64,1) forwards;animation-delay:var(--d)}
+  @keyframes chin{to{opacity:1;transform:none}}
+  @keyframes fadein{to{opacity:1}}
+  #chcard .u{height:2px;width:min(300px,50vw);margin:16px auto 0;border-radius:2px;
+    background:linear-gradient(90deg,var(--cyan),var(--mag));
+    box-shadow:0 0 16px rgba(34,211,238,.6);transform:scaleX(0);transform-origin:left}
+  #chcard.show .u{animation:usweep .8s cubic-bezier(.7,0,.3,1) .35s forwards}
+  @keyframes usweep{to{transform:scaleX(1)}}
+
+  /* ============ HUD + progress chia chapter ============ */
+  #bar{position:fixed;left:50%;top:20px;transform:translateX(-50%);
+    width:min(760px,88vw);z-index:6;display:flex;align-items:center;gap:16px;
+    padding:9px 18px 9px 10px;border-radius:999px;
+    background:rgba(11,17,32,.6);border:1px solid rgba(255,255,255,.09);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    transition:opacity .45s ease,transform .45s ease}
+  body[data-state="play"].idle #bar{opacity:0;transform:translateX(-50%) translateY(-12px);pointer-events:none}
+  body[data-state="intro"] #bar{opacity:0;pointer-events:none}
+  #pp{width:34px;height:34px;border-radius:50%;flex:none;
+    border:1px solid rgba(34,211,238,.4);background:rgba(34,211,238,.06);color:#bfeffb;
+    display:grid;place-items:center;cursor:pointer;transition:background .25s,box-shadow .25s}
+  #pp:hover{background:rgba(34,211,238,.14);box-shadow:0 0 18px rgba(34,211,238,.3)}
+  #pp svg{width:12px;height:12px;display:block}
+  #segs{flex:1;display:flex;gap:5px}
+  #segs .sg{position:relative;height:4px;border-radius:3px;background:rgba(255,255,255,.1);
+    cursor:pointer;overflow:visible;transition:height .15s}
+  #segs .sg:hover{height:7px}
+  #segs .sg i{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:inherit;
+    background:linear-gradient(90deg,var(--cyan),var(--violet));
+    box-shadow:0 0 10px rgba(34,211,238,.5)}
+  #segs .sg em{position:absolute;left:50%;top:11px;transform:translateX(-50%);
+    font-style:normal;font-size:8.5px;letter-spacing:.2em;color:var(--faint);
+    opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+  #bar:hover #segs .sg em{opacity:1}
+  #meta{display:flex;align-items:baseline;gap:12px;flex:none;
+    font-size:11px;letter-spacing:.12em;color:var(--dim);white-space:nowrap}
+  #meta b{font-weight:600;color:#c9d5e5;letter-spacing:.14em}
+  #tLabel{font-family:var(--mono);letter-spacing:.03em;font-size:10.5px}
+
+  #wake{position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:6;
+    width:44px;height:30px;display:grid;place-items:center;cursor:pointer;
+    opacity:0;pointer-events:none;transition:opacity .5s}
+  body[data-state="play"].idle #wake{opacity:.3;pointer-events:auto}
+  #wake:hover{opacity:.95 !important}
+  #wake i{width:6px;height:6px;border-radius:50%;background:var(--cyan);
+    box-shadow:0 0 12px var(--cyan);display:block}
+
+  /* ============ đầu / cuối ============ */
+  .veil{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;cursor:pointer;
+    align-items:center;justify-content:center;text-align:center;padding:24px;
+    background:radial-gradient(90% 70% at 50% 46%, rgba(7,13,34,.52), rgba(5,9,24,.9));
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    transition:opacity .9s ease}
+  .veil.gone{opacity:0;pointer-events:none}
+  .kicker{font-size:11px;letter-spacing:.44em;color:#7a8aa0;text-transform:uppercase;font-weight:600}
+  .veil h1{margin:26px 0 14px;font-weight:700;letter-spacing:.02em;line-height:1.15;
+    font-size:clamp(34px,5.8vw,66px);color:#eef4fc;text-shadow:0 0 40px rgba(34,211,238,.3)}
+  .veil h1 span{display:inline-block;opacity:0;transform:translateY(26px) scale(.55)}
+  body.ready .veil h1 span{animation:chin .6s cubic-bezier(.34,1.56,.64,1) forwards;animation-delay:var(--d)}
+  .veil .under{font-size:clamp(13px,1.5vw,16px);letter-spacing:.3em;color:var(--dim);text-transform:uppercase}
+  .veil .under i{font-style:normal;margin:0 .5em;color:var(--faint)}
+  .veil .under b{font-weight:600}
+  .veil button{margin-top:46px;padding:16px 54px;border-radius:999px;cursor:pointer;
+    border:1px solid rgba(34,211,238,.55);background:rgba(34,211,238,.08);color:#d9f6ff;
+    font-size:14px;letter-spacing:.22em;font-weight:600;text-transform:uppercase;font-family:inherit;
+    box-shadow:0 0 26px rgba(34,211,238,.18),0 0 8px rgba(34,211,238,.1) inset;
+    transition:background .3s,box-shadow .3s,transform .3s}
+  .veil button:hover{background:rgba(34,211,238,.16);transform:translateY(-1px);
+    box-shadow:0 0 44px rgba(34,211,238,.35)}
+  .veil .hint{margin-top:30px;font-size:11.5px;letter-spacing:.14em;color:#4d586a}
+  .veil .hint em{font-style:normal;color:#8b98ac}
+  #endov h2{margin:22px 0 6px;font-weight:700;font-size:clamp(28px,4.2vw,48px);letter-spacing:.02em;
+    text-shadow:0 0 34px rgba(167,139,250,.35)}
+  #endov p{color:var(--dim);font-size:14.5px;letter-spacing:.04em;max-width:640px;line-height:1.8}
+  #endov p b{color:#c9d5e5;font-weight:600}
+  #endov{display:none}
+  body[data-state="end"] #endov{display:flex}
+
+</style>
+</head>
+<body data-state="intro">
+
+<canvas id="cv"></canvas>
+<div id="vignette"></div>
+
+<div id="codebox"></div>
+<div id="sub"><span class="pill" id="subpill"></span></div>
+<div id="chcard"><div class="pre" id="chpre"></div><div class="big" id="chbig"></div><div class="u"></div></div>
+
+<div id="bar">
+  <button id="pp" aria-label="Phát / Tạm dừng"></button>
+  <div id="segs"></div>
+  <div id="meta"><b id="chLabel"></b><span id="tLabel"></span></div>
+</div>
+<div id="wake"><i></i></div>
+
+<div id="intro" class="veil">
+  <div class="kicker">C++ · Trực quan hóa từng dòng code</div>
+  <h1 id="title">Truyền dữ liệu vào hàm</h1>
+  <div class="under"><b style="color:#22d3ee">tham trị</b><i>·</i><b style="color:#f472b6">tham chiếu</b><i>·</i><b style="color:#a78bfa">con trỏ</b></div>
+  <button id="start">Bắt đầu</button>
+  <div class="hint">mỗi dòng code sáng lên đúng lúc nó được thực thi · nên bật âm thanh · bấm <em>Space</em> hoặc chạm vào bất cứ đâu để bắt đầu</div>
+</div>
+
+<div id="endov" class="veil">
+  <div class="kicker">Hết</div>
+  <h2>Bốn cách. Bốn mô hình.</h2>
+  <p><b style="color:#22d3ee">Tham trị:</b> hàm tạo ô nhớ mới và sao chép giá trị.<br>
+     <b style="color:#f472b6">Tham chiếu:</b> không có ô mới, hai cái tên dùng chung một ô nhớ.<br>
+     <b style="color:#a78bfa">Con trỏ:</b> một biến giữ địa chỉ của biến khác.<br>
+     <b style="color:#34d399">Const reference:</b> dữ liệu lớn thì không chép, chỉ đọc, compiler canh chừng hộ.</p>
+  <button id="again">Xem lại</button>
+  <div class="hint"><em>1 – 5</em> nhảy tới từng phần · <em>R</em> xem lại từ đầu</div>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   C++ TRUYỀN DỮ LIỆU VÀO HÀM — neon line-art code film
+   Canvas 2D thuần · glow sprite cache · camera damping
+   ============================================================ */
+
+// ---------- utils ----------
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const eo =t=>1-Math.pow(1-t,3);
+const eio=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const eioq=t=>t<.5?8*t*t*t*t:1-Math.pow(-2*t+2,4)/2;
+function seg(t,a,b,e){e=e||eio;if(t<=a)return 0;if(t>=b)return 1;return e((t-a)/(b-a));}
+function pulse(t,a,b){const q=clamp((t-a)/(b-a),0,1);return Math.sin(q*Math.PI);}
+function rgba(c,a){return `rgba(${c[0]},${c[1]},${c[2]},${a})`;}
+function mixRgba(c1,c2,t){const a=lerp(c1[3],c2[3],t);return `rgba(${Math.round(lerp(c1[0],c2[0],t))},${Math.round(lerp(c1[1],c2[1],t))},${Math.round(lerp(c1[2],c2[2],t))},${a.toFixed(3)})`;}
+
+const F_SANS='-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
+const F_MONO='ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace';
+const C={cyan:[34,211,238],mag:[244,114,182],amber:[251,191,36],violet:[167,139,250],green:[52,211,153],slate:[148,163,184]};
+const PANEL=[11,17,32];
+
+// ---------- glow sprite cache (không shadowBlur) ----------
+const SPRITES={};
+function sprite(col){
+  const key=col.join(',');
+  if(SPRITES[key])return SPRITES[key];
+  const s=document.createElement('canvas');s.width=s.height=128;
+  const g=s.getContext('2d');
+  const r=g.createRadialGradient(64,64,0,64,64,64);
+  r.addColorStop(0,rgba(col,.85));r.addColorStop(.28,rgba(col,.32));
+  r.addColorStop(1,rgba(col,0));
+  g.fillStyle=r;g.fillRect(0,0,128,128);
+  SPRITES[key]=s;return s;
+}
+function glow(x,y,rad,col,a){
+  if(a<=0.003)return;
+  ctx.save();ctx.globalAlpha*=a;
+  ctx.drawImage(sprite(col),x-rad,y-rad,rad*2,rad*2);
+  ctx.restore();
+}
+/* neon line: 1 nét dày mờ + 1 nét lõi sáng */
+function neonStroke(rgb,coreW,coreA,glowW,glowA){
+  ctx.strokeStyle=rgba(rgb,glowA??0.16);ctx.lineWidth=glowW??coreW*5;
+  ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
+  ctx.strokeStyle=rgba(rgb,coreA??0.95);ctx.lineWidth=coreW;ctx.stroke();
+}
+
+// ---------- canvas ----------
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1,base=1;
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  W=window.innerWidth;H=window.innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;
+  cv.style.width=W+'px';cv.style.height=H+'px';
+  base=Math.min(W,H)/1000;
+}
+window.addEventListener('resize',resize);
+
+// ---------- world ----------
+const WO={actors:new Map(),ambient:{glow:0,dim:0}};
+function add(id,kind,p){const a={id,kind,p};WO.actors.set(id,a);return a;}
+function A(id){return WO.actors.get(id);}
+const MAIN_Y=170,TANG_Y=-90,FW=580,FH=232,CW=216,CHh=132;
+
+function buildWorld(){
+  WO.actors.clear();WO.ambient={glow:0,dim:0};
+  add('cam','cam',{x:0,y:150,zoom:1.28,ox:0,rot:0,focus:0});
+  add('cx','cell',{x:0,y:MAIN_Y,s:.85,o:0,w:CW,h:CHh,name:'x',valA:'',valB:'36',valT:0,addr:'0x1000',addrO:0,nEm:0,vEm:0,aEm:0,emph:0,ring:0,ok:0,insp:0,col:C.cyan});
+  add('fMain','frame',{x:0,y:MAIN_Y,w:FW,h:FH,label:'main()',o:0,s:.94,tag:1});
+  add('fTang','frame',{x:0,y:TANG_Y,w:FW,h:FH,label:'rauma()',o:0,s:.94,tag:0});
+  add('cn','cell',{x:0,y:TANG_Y,s:.8,o:0,w:CW,h:CHh,name:'n',valA:'',valB:'36',valT:0,addr:'0x2000',addrO:0,nEm:0,vEm:0,aEm:0,emph:0,ring:0,ok:0,insp:0,col:C.amber});
+  add('cp','cell',{x:0,y:TANG_Y,s:.8,o:0,w:CW,h:CHh,name:'p',valA:'',valB:'',valT:0,addr:'0x2000',addrO:0,nEm:0,vEm:0,aEm:0,emph:0,ring:0,ok:0,insp:0,col:C.violet});
+  add('ghost','ghost',{x:0,y:0,s:.7,o:0,text:'18',col:C.amber});
+  add('flow','flow',{x1:84,y1:MAIN_Y-CHh/2,x2:84,y2:TANG_Y+CHh/2,prog:0,o:0,label:'sao chép',labelO:0,flash:0,col:C.amber});
+  add('nname','name',{x:0,y:TANG_Y,o:0,emph:0,text:'n',ph:0,insp:0,col:C.mag});
+  add('rlink','rlink',{x1:0,y1:TANG_Y+30,x2:0,y2:MAIN_Y-CHh/2,cx2:170,cy2:40,prog:0,o:0,active:0,flash:0,p1:-1,insp:0,col:C.mag});
+  add('parrow','parrow',{x1:84,y1:TANG_Y+CHh/2,x2:84,y2:MAIN_Y-CHh/2-4,prog:0,o:0,label:'trỏ tới',labelO:0,pulse:-1,active:0,insp:0,col:C.violet});
+  add('sum','sum',{x:0,y:440,o:0,seg:0,lines:[],size:19});
+  const mkEls=()=>[{v:'18',o:0,em:0},{v:'36',o:0,em:0},{v:'67',o:0,em:0}];
+  add('va','vec',{x:0,y:MAIN_Y,s:.85,o:0,name:'a',addr:'0x3000',addrO:0,els:mkEls(),nEm:0,aEm:0,emph:0,shield:0,insp:0,col:C.cyan});
+  add('vv','vec',{x:0,y:TANG_Y,s:.85,o:0,name:'v',addr:'0x4000',addrO:0,els:mkEls(),nEm:0,aEm:0,emph:0,shield:0,insp:0,col:C.amber});
+  add('m1','mini',{x:-570,y:30,s:.7,o:0,type:'val',label:'THAM TRỊ',labelO:0,ph:0});
+  add('m2','mini',{x:-190,y:30,s:.7,o:0,type:'ref',label:'THAM CHIẾU',labelO:0,ph:.25});
+  add('m3','mini',{x:190,y:30,s:.7,o:0,type:'ptr',label:'CON TRỎ',labelO:0,ph:.5});
+  add('m4','mini',{x:570,y:30,s:.7,o:0,type:'cref',label:'CONST REF',labelO:0,ph:.75});
+}
+const DUST=[];for(let i=0;i<26;i++){DUST.push({x:(Math.random()*2-1)*1500,y:(Math.random()*2-1)*950,r:.7+Math.random()*1.5,sp:.3+Math.random()*.7,ph:Math.random()*7});}
+
+// ---------- audio ----------
+let ac=null,master=null;
+function initAudio(){
+  if(ac){if(ac.state==='suspended')ac.resume();return;}
+  try{ac=new (window.AudioContext||window.webkitAudioContext)();
+    master=ac.createGain();master.gain.value=.5;master.connect(ac.destination);}catch(e){ac=null;}
+}
+function tone(f,d,o){if(!ac)return;o=o||{};
+  const t0=ac.currentTime+(o.delay||0);
+  const os=ac.createOscillator(),v=ac.createGain();
+  os.type=o.type||'sine';os.frequency.setValueAtTime(f,t0);
+  if(o.f2)os.frequency.exponentialRampToValueAtTime(o.f2,t0+d*.85);
+  v.gain.setValueAtTime(.0001,t0);
+  v.gain.exponentialRampToValueAtTime(o.g||.06,t0+.014);
+  v.gain.exponentialRampToValueAtTime(.0001,t0+d);
+  os.connect(v);v.connect(master);os.start(t0);os.stop(t0+d+.08);}
+function sweep(){if(!ac)return;
+  const t0=ac.currentTime,len=1.0,buf=ac.createBuffer(1,ac.sampleRate*len,ac.sampleRate),ch=buf.getChannelData(0);
+  for(let i=0;i<ch.length;i++)ch[i]=(Math.random()*2-1)*(1-i/ch.length);
+  const src=ac.createBufferSource();src.buffer=buf;
+  const f=ac.createBiquadFilter();f.type='bandpass';f.Q.value=.8;
+  f.frequency.setValueAtTime(340,t0);f.frequency.exponentialRampToValueAtTime(1300,t0+len);
+  const v=ac.createGain();v.gain.setValueAtTime(.0001,t0);
+  v.gain.exponentialRampToValueAtTime(.03,t0+.14);v.gain.exponentialRampToValueAtTime(.0001,t0+len);
+  src.connect(f);f.connect(v);v.connect(master);src.start(t0);}
+const sfx={
+  reveal(){tone(262,.9,{g:.045});tone(392,.75,{g:.03,delay:.06});},
+  create(){tone(220,.5,{g:.045});tone(330,.45,{g:.035,delay:.03});},
+  copy(){tone(392,.15,{g:.045,f2:523});tone(523,.24,{g:.045,delay:.12,f2:660});},
+  link(){tone(440,.28,{type:'triangle',g:.04});tone(554,.4,{type:'triangle',g:.032,delay:.06});},
+  name(){tone(330,.45,{g:.045});tone(392,.5,{g:.035,delay:.08});},
+  write(){tone(740,.07,{g:.04});},
+  addr(){tone(233,.55,{g:.04});},
+  deep(){tone(98,.9,{g:.085});tone(147,.65,{g:.045,delay:.05});},
+  down(){tone(220,.6,{g:.04,f2:110});},
+  whoosh(){sweep();}
+};
+
+// ============================================================
+//  TIMELINE — mỗi beat là một hàm thuần của t ∈ [0,1]
+// ============================================================
+const CH0='MỞ ĐẦU · BIẾN',CH1='I · THAM TRỊ',CH2='II · THAM CHIẾU',CH3='III · CON TRỎ',CH4='IV · VECTOR<int>',CH5='V · TỔNG KẾT';
+const PACE=1.5; // hệ số chậm toàn cục
+const CAPMIN=2.0; // mỗi caption được ở trên màn hình tối thiểu ~CAPMIN giây (trước PACE)
+const beats=[],BI={};
+function B(ch,dur,fn,opts){opts=opts||{};BI[opts.id]=beats.length;
+  const ncap=Array.isArray(opts.sub)?opts.sub.length:(opts.sub?1:0);
+  dur=Math.max(dur,ncap*CAPMIN);
+  beats.push({ch,dur:dur*PACE,fn,id:opts.id,sub:opts.sub??'',code:opts.code??'',line:opts.line??'',enter:opts.enter||null});}
+function elsOn(p,v){p.els.forEach(e=>e.o=v);}
+
+/* ================= CH0 — BIẾN LÀ GÌ ================= */
+B(CH0,3.2,(t,pr)=>{ // z_var
+  const cx=A('cx').p,cam=A('cam').p;
+  WO.ambient.glow=seg(t,0,.6);
+  cam.x=0;cam.y=lerp(170,150,eio(t));cam.zoom=lerp(1.34,1.4,eio(t));cam.ox=lerp(0,W<900?60:150,seg(t,.2,.8));
+  cx.o=seg(t,.08,.5);cx.s=lerp(.85,1,eo(seg(t,.08,.55)));
+  cx.nEm=pulse(t,.18,.5);
+  cx.valA=t<.5?'':'18';
+  cx.vEm=pulse(t,.5,.8);
+  cx.aEm=0;cx.addrO=seg(t,.62,.9);
+  cx.emph=.12;
+  if(pr<.5&&t>=.5)sfx.write();
+  if(pr<.66&&t>=.66)sfx.addr();
+},{id:'z_var',sub:[{at:.4,text:'Câu lệnh này vừa tạo ra một ô nhớ trong máy tính.'}],code:'intro',line:'decl',enter:()=>sfx.reveal()});
+
+B(CH0,4.8,(t)=>{ // z_parts
+  const cx=A('cx').p,cam=A('cam').p;
+  WO.ambient.glow=1;cam.x=0;cam.y=150;cam.zoom=1.4;cam.ox=W<900?60:150;
+  cx.o=1;cx.s=1;cx.valA='18';cx.addrO=1;cx.emph=.1;
+  cx.nEm=pulse(t,.06,.28);
+  cx.vEm=pulse(t,.38,.6);
+  cx.aEm=pulse(t,.7,.95);
+},{id:'z_parts',
+  sub:[{at:.06,text:'Ô nhớ này có tên là <code>x</code>.'},
+       {at:.38,text:'Bên trong ô đang chứa số <code>18</code>.'},
+       {at:.7,text:'Mỗi ô nhớ đều có một địa chỉ riêng, ô này ở <code>0x1000</code>.'}],code:'intro',line:'decl'});
+
+B(CH0,2.8,(t)=>{ // z_stack
+  const cx=A('cx').p,fm=A('fMain').p,cam=A('cam').p;
+  WO.ambient.glow=1;
+  cam.x=0;cam.y=lerp(150,160,eioq(t));cam.zoom=lerp(1.4,1.1,eioq(t));cam.ox=W<900?60:150;
+  cx.o=1;cx.s=1;cx.valA='18';cx.addrO=1;cx.emph=.08;
+  fm.o=seg(t,.15,.65);fm.s=lerp(.94,1,eo(seg(t,.15,.7)));fm.wx=lerp(.45,1,eo(seg(t,.15,.8)));
+},{id:'z_stack',sub:[{at:.35,text:'Khi chương trình chạy vào <code>main</code> thì x sống ở đây, trong phần bộ nhớ dành cho main.'}],code:'intro',line:'decl',enter:()=>sfx.create()});
+
+B(CH0,1.7,(t)=>{ // z_hold
+  const cx=A('cx').p,fm=A('fMain').p,cam=A('cam').p;
+  WO.ambient.glow=1;cam.x=0;cam.y=160;cam.zoom=1.1;cam.ox=W<900?60:150;
+  cx.o=1;cx.s=1;cx.valA='18';cx.addrO=1;cx.emph=.06;
+  fm.o=1;fm.s=1;
+},{id:'z_hold',sub:'',code:'intro',line:''});
+
+/* ================= CH1 — THAM TRỊ ================= */
+B(CH1,2.4,(t)=>{ // a_x
+  const cx=A('cx').p,fm=A('fMain').p,cam=A('cam').p;
+  WO.ambient.glow=1;cam.x=0;cam.y=lerp(160,152,eio(t));cam.zoom=lerp(1.1,1.2,eio(t));cam.ox=W<900?60:150;
+  cx.o=1;cx.s=1;cx.valA='18';cx.addrO=1;
+  cx.nEm=pulse(t,.1,.4);cx.vEm=pulse(t,.15,.5);cx.aEm=pulse(t,.2,.55);cx.emph=.06;
+  fm.o=1;fm.s=1;
+},{id:'a_x',sub:[{at:.25,text:'Ô của x đang có sẵn số <code>18</code> và nằm ở địa chỉ <code>0x1000</code>.'}],code:'val',line:'x10'});
+
+B(CH1,2.7,(t,pr)=>{ // a_call
+  const cx=A('cx').p,fm=A('fMain').p,ft=A('fTang').p,cam=A('cam').p;
+  WO.ambient.glow=1;fm.o=1;fm.s=1;
+  cam.x=0;cam.y=lerp(152,40,eioq(seg(t,.1,.85)));cam.zoom=lerp(1.2,.99,eioq(seg(t,.1,.85)));cam.ox=W<900?60:150;
+  cx.o=1;cx.valA='18';cx.addrO=1;
+  cx.vEm=.5*pulse(t,.4,.65);
+  ft.o=seg(t,.3,.75);ft.s=lerp(.94,1,eo(seg(t,.3,.8)));ft.wx=lerp(.45,1,eo(seg(t,.3,.9)));ft.y=TANG_Y+lerp(26,0,eo(seg(t,.3,.8)));
+  if(pr<.32&&t>=.32)sfx.create();
+},{id:'a_call',sub:[{at:.45,text:'Chương trình gọi hàm rauma, một khu vực mới mở ra ngay phía trên stack.'}],code:'val',line:'call'});
+
+B(CH1,3.4,(t)=>{ // a_param
+  const cx=A('cx').p,ft=A('fTang').p,cn=A('cn').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;ft.o=1;ft.s=1;ft.y=TANG_Y;
+  cam.x=0;cam.y=lerp(40,TANG_Y,eioq(seg(t,.05,.75)));cam.zoom=lerp(.99,1.26,eioq(seg(t,.05,.75)));cam.ox=W<900?60:150;
+  cn.o=seg(t,.25,.62);cn.s=lerp(.8,1,eo(seg(t,.25,.7)));
+  cn.nEm=pulse(t,.3,.55);
+  cn.valA='';cn.addrO=seg(t,.66,.9);cn.aEm=pulse(t,.66,.92);
+},{id:'a_param',
+  sub:[{at:.32,text:'Hàm rauma có một tham số tên là <code>n</code>.'},
+       {at:.66,text:'Máy tính cấp cho n một ô nhớ mới tinh ở địa chỉ <code>0x2000</code>.'}],code:'val',line:'sig',enter:()=>sfx.name()});
+
+B(CH1,3.3,(t,pr)=>{ // a_copy
+  const cx=A('cx').p,ft=A('fTang').p,cn=A('cn').p,fl=A('flow').p,gh=A('ghost').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;ft.o=1;ft.s=1;
+  cn.o=1;cn.s=1;cn.addrO=1;
+  cam.x=0;cam.y=lerp(TANG_Y,45,eioq(seg(t,0,.6)));cam.zoom=lerp(1.26,1.04,eioq(seg(t,0,.6)));cam.ox=W<900?60:150;
+  fl.o=seg(t,.12,.35);fl.prog=seg(t,.12,.55,eio);fl.labelO=seg(t,.5,.75);
+  cx.vEm=Math.max(.5+pulse(t,.15,.4)*.5,.6*pulse(t,.8,.97));
+  const gT=seg(t,.32,.72,eioq);
+  gh.x=lerp(fl.x1,fl.x2,gT);gh.y=lerp(fl.y1-8,fl.y2+8,gT);
+  gh.o=seg(t,.28,.4)*(1-seg(t,.72,.86));gh.s=lerp(.62,1,eo(seg(t,.28,.5)));gh.text='18';gh.col=C.amber;
+  cn.valA=t<.75?'':'18';
+  cn.ok=pulse(t,.75,1);
+  cn.vEm=pulse(t,.75,1);
+  if(pr<.32&&t>=.32)sfx.copy();
+  if(pr<.75&&t>=.75)sfx.write();
+},{id:'a_copy',
+  sub:[{at:.3,text:'Số <code>18</code> được chép từ ô của x sang ô của n.'},
+       {at:.8,text:'Ô của x không hề mất gì cả.'}],code:'val',line:'call'});
+
+B(CH1,2.6,(t)=>{ // a_two
+  const cx=A('cx').p,ft=A('fTang').p,cn=A('cn').p,fl=A('flow').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;ft.o=1;ft.s=1;
+  cn.o=1;cn.valA='18';cn.addrO=1;
+  fl.o=1-seg(t,.1,.5);fl.prog=1;fl.labelO=1-seg(t,.1,.45);
+  cam.x=0;cam.y=45;cam.zoom=lerp(1.04,1,eio(t));cam.ox=W<900?60:150;
+  cx.aEm=pulse(t,.2,.48);cn.aEm=pulse(t,.55,.9);
+},{id:'a_two',sub:[{at:.22,text:'Hai ô này ở hai địa chỉ khác nhau, <code>0x1000</code> và <code>0x2000</code>, chúng hoàn toàn tách biệt.'}],code:'val',line:'call'});
+
+B(CH1,2.8,(t,pr)=>{ // a_set
+  const cx=A('cx').p,ft=A('fTang').p,cn=A('cn').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;ft.o=1;ft.s=1;
+  cn.o=1;cn.valA='18';cn.valB='36';cn.addrO=1;
+  cam.x=0;cam.y=lerp(45,TANG_Y,eioq(seg(t,0,.7)));cam.zoom=lerp(1,1.3,eioq(seg(t,0,.7)));cam.ox=W<900?60:150;
+  cn.valT=seg(t,.2,.6,eio);
+  cn.ok=pulse(t,.5,.85);cn.ring=seg(t,.4,.9);
+  cn.vEm=.9*pulse(t,.2,.75);cn.emph=.4*pulse(t,.2,.8);
+  if(pr<.22&&t>=.22)sfx.write();
+},{id:'a_set',sub:[{at:.5,text:'Lệnh gán chạy xong, chỉ mình ô của n đổi thành <code>36</code>.'}],code:'val',line:'n20'});
+
+B(CH1,2.4,(t)=>{ // a_check
+  const cx=A('cx').p,ft=A('fTang').p,cn=A('cn').p,cam=A('cam').p;
+  WO.ambient.glow=1;ft.o=1;ft.s=1;
+  cn.o=1;cn.valA='18';cn.valB='36';cn.valT=1;cn.addrO=1;
+  cx.o=1;cx.valA='18';cx.addrO=1;
+  cam.x=0;cam.y=lerp(TANG_Y,152,eioq(seg(t,.05,.8)));cam.zoom=1.3;cam.ox=W<900?60:150;
+  cx.vEm=.7*pulse(t,.35,.85);
+},{id:'a_check',sub:[{at:.4,text:'Còn ô của x vẫn y nguyên số <code>18</code>.'}],code:'val',line:'n20'});
+
+B(CH1,2.7,(t,pr)=>{ // a_ret
+  const cx=A('cx').p,ft=A('fTang').p,cn=A('cn').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;
+  const out=seg(t,.2,.75,eio);
+  ft.o=1-out;ft.y=TANG_Y-46*eo(out);
+  cn.o=1-out;cn.valT=1;cn.valA='18';cn.addrO=1-out*.4;cn.y=TANG_Y-46*eo(out);
+  cam.x=0;cam.y=lerp(152,140,eio(t));cam.zoom=lerp(1.3,1.16,eio(t));cam.ox=W<900?60:150;
+  cx.emph=.05;
+  if(pr<.2&&t>=.2)sfx.down();
+},{id:'a_ret',sub:[{at:.38,text:'Hàm rauma chạy xong, toàn bộ khu vực của nó bị dọn đi, ô của n cũng biến mất theo.'}],code:'val',line:'end'});
+
+B(CH1,4.6,(t)=>{ // a_done
+  const cx=A('cx').p,ft=A('fTang').p,cn=A('cn').p,sm=A('sum').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;cx.emph=.08;
+  cx.vEm=.5*pulse(t,.34,.55);
+  ft.o=0;cn.o=0;
+  cam.x=0;cam.y=lerp(140,185,eioq(seg(t,0,.6)));cam.zoom=lerp(1.16,1.05,eioq(seg(t,0,.6)));cam.ox=W<900?60:150;
+  WO.ambient.dim=.32*seg(t,.1,.6);
+  sm.o=seg(t,.3,.8);sm.seg=seg(t,.3,.95,eio);
+  sm.x=0;sm.y=520;sm.size=22;
+  sm.lines=['x   @ 0x1000  =  18','n   @ 0x2000  =  36   (đã hủy)'];
+},{id:'a_done',
+  sub:[{at:.3,text:'Đổi bản sao thì bản chính không hề hấn gì.'},
+       {at:.68,text:'Cách này gọi là truyền tham trị, tiếng Anh là <code>pass by value</code>.'}],code:'val',line:'end'});
+
+/* ================= CH2 — THAM CHIẾU ================= */
+B(CH2,2.8,(t)=>{ // r_amp
+  const cx=A('cx').p,sm=A('sum').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.valT=0;cx.addrO=1;cx.emph=.06;
+  sm.o=0;WO.ambient.dim=.32*(1-seg(t,0,.5));
+  cam.x=0;cam.y=lerp(185,140,eioq(t));cam.zoom=lerp(1.05,1.28,eioq(t));cam.ox=W<900?60:150;
+},{id:'r_amp',sub:[{at:.35,text:'Lần này code chỉ khác đúng một chỗ, thêm dấu <code>&amp;</code> ngay trước chữ n.'}],code:'ref',line:'sig'});
+
+B(CH2,2.3,(t,pr)=>{ // r_call
+  const cx=A('cx').p,ft=A('fTang').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;
+  cam.x=0;cam.y=lerp(140,45,eioq(seg(t,.1,.85)));cam.zoom=lerp(1.28,1,eioq(seg(t,.1,.85)));cam.ox=W<900?60:150;
+  ft.o=seg(t,.3,.75);ft.s=lerp(.94,1,eo(seg(t,.3,.8)));ft.wx=lerp(.45,1,eo(seg(t,.3,.9)));ft.y=TANG_Y+lerp(26,0,eo(seg(t,.3,.8)));
+  if(pr<.32&&t>=.32)sfx.create();
+},{id:'r_call',sub:[{at:.45,text:'Mọi thứ bắt đầu giống hệt, chương trình gọi hàm rauma với x.'}],code:'ref',line:'call'});
+
+B(CH2,3.4,(t,pr)=>{ // r_bind
+  const cx=A('cx').p,ft=A('fTang').p,nn=A('nname').p,rl=A('rlink').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;ft.o=1;ft.s=1;ft.y=TANG_Y;
+  cam.x=0;cam.y=lerp(45,25,eioq(t));cam.zoom=lerp(1,1.06,eioq(t));cam.ox=W<900?60:150;
+  nn.o=seg(t,.1,.4);nn.emph=pulse(t,.15,.5);nn.text='n';
+  rl.o=seg(t,.4,.6);rl.prog=seg(t,.42,.85,eio);
+  rl.x1=0;rl.y1=TANG_Y+30;
+  if(pr<.42&&t>=.42)sfx.link();
+},{id:'r_bind',
+  sub:[{at:.18,text:'n vẫn được tạo ra, nhưng lần này không hề có ô nhớ mới nào.'},
+       {at:.62,text:'<code>n</code> chỉ là một cái tên thứ hai trỏ vào chính ô của x.'}],code:'ref',line:'sig'});
+
+B(CH2,2.6,(t)=>{ // r_same
+  const cx=A('cx').p,ft=A('fTang').p,nn=A('nname').p,rl=A('rlink').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;ft.o=1;ft.s=1;
+  nn.o=1;rl.o=1;rl.prog=1;rl.active=1;
+  nn.emph=pulse(t,.1,.45)+.1;
+  cx.aEm=pulse(t,.5,.9);cx.nEm=pulse(t,.5,.9)*.5;
+  cam.x=0;cam.y=lerp(25,45,eio(t));cam.zoom=lerp(1.06,1.02,eio(t));cam.ox=W<900?60:150;
+},{id:'r_same',sub:[{at:.25,text:'Hai cái tên x và n giờ cùng chỉ vào một ô duy nhất, địa chỉ <code>0x1000</code>.'}],code:'ref',line:'sig'});
+
+B(CH2,2.8,(t,pr)=>{ // r_set
+  const cx=A('cx').p,ft=A('fTang').p,nn=A('nname').p,rl=A('rlink').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.valB='36';cx.addrO=1;ft.o=1;ft.s=1;
+  nn.o=1;rl.o=1;rl.prog=1;rl.active=0;
+  rl.flash=pulse(t,.15,.8);rl.p1=seg(t,.12,.65,eio);
+  nn.emph=.9*pulse(t,.12,.7);
+  cx.valT=seg(t,.25,.62,eio);
+  cx.ok=pulse(t,.55,.9);cx.ring=seg(t,.5,.95);
+  cx.vEm=.95*pulse(t,.25,.8);cx.emph=.4*pulse(t,.25,.85);
+  cam.x=0;cam.y=lerp(45,90,eioq(seg(t,.05,.7)));cam.zoom=lerp(1.02,1.18,eioq(seg(t,.05,.7)));cam.ox=W<900?60:150;
+  if(pr<.3&&t>=.3)sfx.link();
+  if(pr<.55&&t>=.55)sfx.write();
+},{id:'r_set',sub:[{at:.55,text:'Nên khi n đổi thành <code>36</code> thì chính ô đó đổi theo.'}],code:'ref',line:'n20'});
+
+B(CH2,2.3,(t)=>{ // r_check
+  const cx=A('cx').p,ft=A('fTang').p,nn=A('nname').p,rl=A('rlink').p,cam=A('cam').p;
+  WO.ambient.glow=1;ft.o=1;ft.s=1;nn.o=1;nn.emph=.15;
+  rl.o=1;rl.prog=1;rl.active=1;rl.flash=0;rl.p1=-1;
+  cx.o=1;cx.valA='18';cx.valB='36';cx.valT=1;cx.addrO=1;
+  cx.vEm=.4+.3*pulse(t,.2,.8);
+  cam.x=0;cam.y=lerp(90,100,eio(t));cam.zoom=1.18;cam.ox=W<900?60:150;
+},{id:'r_check',sub:[{at:.3,text:'Và x đương nhiên cũng thành <code>36</code> luôn, vì hai cái tên là một.'}],code:'ref',line:'n20'});
+
+B(CH2,2.5,(t,pr)=>{ // r_ret
+  const cx=A('cx').p,ft=A('fTang').p,nn=A('nname').p,rl=A('rlink').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.valB='36';cx.valT=1;cx.addrO=1;
+  const out=seg(t,.2,.7,eio);
+  ft.o=1-out;ft.y=TANG_Y-40*eo(out);
+  nn.o=1-out;nn.y=TANG_Y-40*eo(out);
+  rl.o=1-seg(t,.1,.55);rl.prog=1-seg(t,.1,.55);rl.active=0;rl.p1=-1;
+  cam.x=0;cam.y=lerp(100,150,eioq(t));cam.zoom=lerp(1.18,1.12,eioq(t));cam.ox=W<900?60:150;
+  if(pr<.2&&t>=.2)sfx.down();
+},{id:'r_ret',sub:[{at:.38,text:'Hàm kết thúc, cái tên n biến mất, còn ô nhớ vẫn ở đó với số <code>36</code>.'}],code:'ref',line:'end'});
+
+B(CH2,4.4,(t)=>{ // r_done
+  const cx=A('cx').p,sm=A('sum').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.valB='36';cx.valT=1;cx.addrO=1;cx.emph=.08;
+  cam.x=0;cam.y=lerp(150,185,eioq(seg(t,0,.6)));cam.zoom=lerp(1.12,1.05,eioq(seg(t,0,.6)));cam.ox=W<900?60:150;
+  WO.ambient.dim=.32*seg(t,.1,.6);
+  sm.o=seg(t,.3,.8);sm.seg=seg(t,.3,.95,eio);
+  sm.x=0;sm.y=520;sm.size=22;
+  sm.lines=['x   @ 0x1000  =  36','n   @ 0x1000  =  36   ·   cùng một ô nhớ'];
+},{id:'r_done',
+  sub:[{at:.3,text:'x và n thực chất là hai cái tên của cùng một ô nhớ.'},
+       {at:.68,text:'Cách này gọi là truyền tham chiếu, tiếng Anh là <code>reference</code>.'}],code:'ref',line:'end'});
+
+/* ================= CH3 — CON TRỎ ================= */
+B(CH3,2.3,(t)=>{ // p_re
+  const cx=A('cx').p,sm=A('sum').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.valB='36';cx.addrO=1;
+  cx.valT=1-seg(t,.2,.6,eio);
+  cx.vEm=.6*pulse(t,.2,.7);
+  sm.o=0;WO.ambient.dim=.32*(1-seg(t,0,.5));
+  cam.x=0;cam.y=lerp(185,150,eioq(t));cam.zoom=lerp(1.05,1.28,eioq(t));cam.ox=W<900?60:150;
+},{id:'p_re',sub:[{at:.35,text:'Ta đặt lại giá trị của x thành <code>18</code> cho ví dụ cuối nhé.'}],code:'ptr',line:'x10'});
+
+B(CH3,3.0,(t,pr)=>{ // p_call
+  const cx=A('cx').p,ft=A('fTang').p,gh=A('ghost').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.valT=0;cx.addrO=1;
+  cam.x=0;cam.y=lerp(150,60,eioq(seg(t,.05,.8)));cam.zoom=lerp(1.28,1.05,eioq(seg(t,.05,.8)));cam.ox=W<900?60:150;
+  ft.o=seg(t,.3,.7);ft.s=lerp(.94,1,eo(seg(t,.3,.75)));ft.y=TANG_Y+lerp(26,0,eo(seg(t,.3,.75)));
+  cx.aEm=.4+.6*pulse(t,.3,.7);
+  gh.col=C.violet;gh.text='0x1000';
+  const gT=seg(t,.55,.92,eioq);
+  gh.x=84*seg(t,.5,.8,eio);gh.y=lerp(MAIN_Y+CHh/2+30,72,gT);
+  gh.o=seg(t,.5,.62);gh.s=lerp(.55,.75,gT);
+  if(pr<.32&&t>=.32)sfx.create();
+  if(pr<.55&&t>=.55)sfx.addr();
+},{id:'p_call',sub:[{at:.5,text:'Dấu <code>&amp;</code> trước x nghĩa là lấy địa chỉ của x, tức là số <code>0x1000</code>.'}],code:'ptr',line:'call'});
+
+B(CH3,3.4,(t,pr)=>{ // p_param
+  const cx=A('cx').p,ft=A('fTang').p,cp=A('cp').p,gh=A('ghost').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;ft.o=1;ft.s=1;ft.y=TANG_Y;
+  cam.x=0;cam.y=lerp(60,25,eioq(t));cam.zoom=lerp(1.05,1.02,eioq(t));cam.ox=W<900?60:150;
+  cp.o=seg(t,.1,.45);cp.s=lerp(.8,1,eo(seg(t,.1,.5)));
+  cp.nEm=pulse(t,.15,.5);
+  cp.addrO=seg(t,.32,.6);cp.aEm=pulse(t,.32,.6);
+  gh.col=C.violet;gh.text='0x1000';
+  const gT=seg(t,.2,.62,eioq);
+  gh.x=84;gh.y=lerp(72,TANG_Y+6,gT);
+  gh.o=(1-seg(t,.62,.78));gh.s=lerp(.75,1,gT);
+  cp.valA=t<.66?'':'0x1000';
+  cp.ok=pulse(t,.66,.95);
+  cp.vEm=pulse(t,.66,.95);
+  if(pr<.66&&t>=.66)sfx.write();
+},{id:'p_param',
+  sub:[{at:.3,text:'p cũng chỉ là một biến bình thường, có ô nhớ riêng ở <code>0x2000</code>.'},
+       {at:.75,text:'Nhưng số chứa bên trong p chính là địa chỉ của x.'}],code:'ptr',line:'sig'});
+
+B(CH3,2.7,(t)=>{ // p_two
+  const cx=A('cx').p,ft=A('fTang').p,cp=A('cp').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;ft.o=1;ft.s=1;
+  cp.o=1;cp.s=1;cp.valA='0x1000';cp.addrO=1;
+  cam.x=0;cam.y=25;cam.zoom=1.02;cam.ox=W<900?60:150;
+  cp.aEm=pulse(t,.1,.45);cx.aEm=pulse(t,.55,.9);
+},{id:'p_two',sub:[{at:.25,text:'Nhớ kỹ nhé, p ở địa chỉ <code>0x2000</code> còn x ở <code>0x1000</code>, hai biến hoàn toàn khác nhau.'}],code:'ptr',line:'sig'});
+
+B(CH3,2.3,(t,pr)=>{ // p_link
+  const cx=A('cx').p,ft=A('fTang').p,cp=A('cp').p,pa=A('parrow').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;ft.o=1;ft.s=1;
+  cp.o=1;cp.valA='0x1000';cp.addrO=1;
+  cam.x=0;cam.y=lerp(25,30,eio(t));cam.zoom=lerp(1.02,1.04,eio(t));cam.ox=W<900?60:150;
+  pa.o=seg(t,.15,.4);pa.prog=seg(t,.15,.7,eio);pa.labelO=seg(t,.55,.85);
+  if(pr<.2&&t>=.2)sfx.link();
+},{id:'p_link',sub:[{at:.5,text:'Vì p chứa địa chỉ của x nên ta nói p đang trỏ tới x.'}],code:'ptr',line:'sig'});
+
+B(CH3,2.7,(t,pr)=>{ // p_deref1
+  const cx=A('cx').p,ft=A('fTang').p,cp=A('cp').p,pa=A('parrow').p,cam=A('cam').p;
+  WO.ambient.glow=1;cx.o=1;cx.valA='18';cx.addrO=1;ft.o=1;ft.s=1;
+  cp.o=1;cp.valA='0x1000';cp.addrO=1;
+  cam.x=0;cam.y=lerp(30,TANG_Y+10,eioq(seg(t,0,.6)));cam.zoom=lerp(1.04,1.22,eioq(seg(t,0,.6)));cam.ox=W<900?60:150;
+  pa.o=1;pa.prog=1;pa.active=0;pa.labelO=0;
+  cp.vEm=.5+.5*Math.sin(t*Math.PI*4)*seg(t,.1,.9);
+  pa.pulse=seg(t,.3,.95,eio)*.45;
+  if(pr<.3&&t>=.3)sfx.addr();
+},{id:'p_deref1',sub:[{at:.3,text:'Dấu sao trước p nghĩa là hãy đi theo cái địa chỉ mà p đang cầm.'}],code:'ptr',line:'deref'});
+
+B(CH3,3.1,(t,pr)=>{ // p_deref2
+  const cx=A('cx').p,ft=A('fTang').p,cp=A('cp').p,pa=A('parrow').p,cam=A('cam').p;
+  WO.ambient.glow=1;ft.o=1;ft.s=1;cp.o=1;cp.s=1;cp.valA='0x1000';cp.addrO=1;
+  cx.o=1;cx.valA='18';cx.valB='36';cx.addrO=1;
+  cam.x=0;cam.y=lerp(TANG_Y+10,110,eioq(seg(t,.1,.7)));cam.zoom=lerp(1.22,1.16,eioq(seg(t,.1,.7)));cam.ox=W<900?60:150;
+  pa.o=1;pa.prog=1;
+  pa.pulse=lerp(.45,1,seg(t,.05,.55,eioq));
+  cx.ring=seg(t,.55,.95);
+  cx.ok=pulse(t,.6,.95);
+  cx.vEm=.95*pulse(t,.58,.98);cx.emph=.5*pulse(t,.58,1);
+  cx.valT=seg(t,.6,.9,eio);
+  if(pr<.55&&t>=.55)sfx.deep();
+  if(pr<.64&&t>=.64)sfx.write();
+},{id:'p_deref2',sub:[{at:.6,text:'Nó tìm đúng ô <code>0x1000</code> và ghi số <code>36</code> vào đó.'}],code:'ptr',line:'deref'});
+
+B(CH3,4.6,(t,pr)=>{ // p_done
+  const cx=A('cx').p,ft=A('fTang').p,cp=A('cp').p,pa=A('parrow').p,sm=A('sum').p,cam=A('cam').p;
+  WO.ambient.glow=1;
+  const out=seg(t,0,.4,eio);
+  ft.o=1-out;ft.y=TANG_Y-40*eo(out);
+  cp.o=1-out;cp.y=TANG_Y-40*eo(out);cp.valA='0x1000';
+  pa.o=1-seg(t,0,.35);pa.pulse=-1;
+  cx.o=1;cx.valA='18';cx.valB='36';cx.valT=1;cx.addrO=1;cx.emph=.08;cx.ring=0;
+  cam.x=0;cam.y=lerp(110,185,eioq(seg(t,.1,.7)));cam.zoom=lerp(1.16,1.05,eioq(seg(t,.1,.7)));cam.ox=W<900?60:150;
+  WO.ambient.dim=.32*seg(t,.25,.65);
+  sm.o=seg(t,.42,.8);sm.seg=seg(t,.42,.95,eio);
+  sm.x=0;sm.y=520;sm.size=22;
+  sm.lines=['p   @ 0x2000  =  0x1000','x   @ 0x1000  =  36'];
+  if(pr<.05&&t>=.05)sfx.down();
+},{id:'p_done',
+  sub:[{at:.4,text:'<code>*p</code> nghĩa là truy cập ô nhớ nằm ở cái địa chỉ mà p đang giữ.'},
+       {at:.75,text:'Đây là phép giải tham chiếu, tiếng Anh là <code>dereference</code>.'}],code:'ptr',line:'deref'});
+
+/* ================= CH4 — VECTOR<int> ================= */
+B(CH4,3.2,(t,pr)=>{ // v_show — x nhường chỗ cho vector a
+  const cx=A('cx').p,va=A('va').p,fm=A('fMain').p,cam=A('cam').p;
+  WO.ambient.glow=1;fm.o=1;fm.s=1;fm.y=MAIN_Y;
+  cam.x=0;cam.y=lerp(185,150,eioq(t));cam.zoom=lerp(1.05,1.22,eioq(t));cam.ox=W<900?60:150;
+  WO.ambient.dim=.32*(1-seg(t,0,.4));
+  cx.o=1-seg(t,0,.4);cx.y=MAIN_Y-40*eo(seg(t,0,.4));
+  va.o=seg(t,.3,.7);va.s=lerp(.85,1,eo(seg(t,.3,.75)));
+  va.els.forEach((e,i)=>{e.o=seg(t,.45+i*.12,.58+i*.12);e.em=pulse(t,.58+i*.12,.75+i*.12);});
+  va.nEm=pulse(t,.35,.6);va.addrO=seg(t,.6,.85);va.aEm=pulse(t,.6,.85);
+  if(pr<.45&&t>=.45)sfx.create();
+},{id:'v_show',sub:[{at:.5,text:'Vector là một ô lớn chứa nhiều số cùng lúc, ở đây là <code>18</code>, <code>36</code> và <code>67</code>.'}],code:'vec1',line:'decl'});
+
+B(CH4,2.6,(t,pr)=>{ // v_call — gọi hàm với vector
+  const va=A('va').p,ft=A('fTang').p,cam=A('cam').p; ft.label='dem()';
+  WO.ambient.glow=1;va.o=1;elsOn(va,1);va.addrO=1;
+  cam.x=0;cam.y=lerp(150,40,eioq(seg(t,.1,.85)));cam.zoom=lerp(1.22,.99,eioq(seg(t,.1,.85)));cam.ox=W<900?60:150;
+  va.vEm=.5*pulse(t,.4,.65);
+  ft.o=seg(t,.3,.75);ft.s=lerp(.94,1,eo(seg(t,.3,.8)));ft.wx=lerp(.45,1,eo(seg(t,.3,.9)));ft.y=TANG_Y+lerp(26,0,eo(seg(t,.3,.8)));
+  if(pr<.32&&t>=.32)sfx.create();
+},{id:'v_call',sub:[{at:.45,text:'Gọi hàm dem và đưa cả vector a vào.'}],code:'vec1',line:'call'});
+
+B(CH4,3.0,(t)=>{ // v_param — vector mới hoàn toàn
+  const va=A('va').p,ft=A('fTang').p,vv=A('vv').p,cam=A('cam').p; ft.label='dem()';
+  WO.ambient.glow=1;va.o=1;elsOn(va,1);va.addrO=1;ft.o=1;ft.s=1;ft.y=TANG_Y;
+  cam.x=0;cam.y=lerp(40,TANG_Y,eioq(seg(t,.05,.75)));cam.zoom=lerp(.99,1.24,eioq(seg(t,.05,.75)));cam.ox=W<900?60:150;
+  vv.o=seg(t,.25,.62);vv.s=lerp(.85,1,eo(seg(t,.25,.7)));
+  vv.els.forEach(e=>e.o=0);
+  vv.nEm=pulse(t,.3,.55);
+  vv.addrO=seg(t,.62,.88);vv.aEm=pulse(t,.62,.9);
+},{id:'v_param',
+  sub:[{at:.32,text:'Vì truyền theo kiểu tham trị nên hàm phải tạo một vector mới.'},
+       {at:.66,text:'Một vector hoàn toàn mới ở địa chỉ <code>0x4000</code>.'}],code:'vec1',line:'sig',enter:()=>sfx.name()});
+
+B(CH4,5.5,(t,pr)=>{ // v_copy — chép TỪNG phần tử
+  const va=A('va').p,ft=A('fTang').p,vv=A('vv').p,fl=A('flow').p,gh=A('ghost').p,cam=A('cam').p; ft.label='dem()';
+  WO.ambient.glow=1;va.o=1;elsOn(va,1);va.addrO=1;ft.o=1;ft.s=1;
+  vv.o=1;vv.s=1;vv.addrO=1;
+  cam.x=0;cam.y=lerp(TANG_Y,45,eioq(seg(t,0,.5)));cam.zoom=lerp(1.24,1.02,eioq(seg(t,0,.5)));cam.ox=W<900?60:150;
+  fl.o=seg(t,.08,.25);fl.prog=seg(t,.08,.4,eio);fl.labelO=seg(t,.4,.6);
+  const vals=['18','36','67'];
+  gh.o=0;
+  for(let i=0;i<3;i++){
+    const w0=.16+i*.2,w1=.34+i*.2;
+    const gT=seg(t,w0,w1,eioq);
+    if(t>=w0-.04&&t<=w1+.08){
+      gh.text=vals[i];gh.col=C.amber;
+      gh.x=84;gh.y=lerp(MAIN_Y-72,TANG_Y+72,gT);
+      gh.s=lerp(.55,.85,eo(gT));
+      gh.o=Math.max(gh.o,seg(t,w0-.04,w0+.02)*(1-seg(t,w1,w1+.06)));
+    }
+    vv.els[i].o=seg(t,w1-.02,w1+.04);
+    vv.els[i].em=pulse(t,w1,w1+.12);
+    va.els[i].em=.4*pulse(t,w0,w0+.1);
+    if(pr<w1&&t>=w1)sfx.write();
+  }
+},{id:'v_copy',
+  sub:[{at:.16,text:'Và nó bắt đầu chép, từng phần tử một.'},
+       {at:.78,text:'Vector có bao nhiêu phần tử thì phải chép bấy nhiêu lần.'}],code:'vec1',line:'call'});
+
+B(CH4,3.8,(t)=>{ // v_cost — cái giá của việc chép
+  const va=A('va').p,ft=A('fTang').p,vv=A('vv').p,fl=A('flow').p,sm=A('sum').p,cam=A('cam').p; ft.label='dem()';
+  WO.ambient.glow=1;va.o=1;elsOn(va,1);va.addrO=1;ft.o=1;ft.s=1;
+  vv.o=1;vv.s=1;vv.addrO=1;elsOn(vv,1);
+  fl.o=1-seg(t,0,.4);fl.labelO=fl.o;
+  cam.x=0;cam.y=lerp(45,185,eioq(seg(t,.05,.65)));cam.zoom=lerp(1.02,1.02,eio(t));cam.ox=W<900?60:150;
+  va.emph=.06;vv.emph=.06;
+  WO.ambient.dim=.32*seg(t,.15,.6);
+  sm.o=seg(t,.35,.8);sm.seg=seg(t,.35,.95,eio);
+  sm.x=0;sm.y=520;sm.size=22;
+  sm.lines=['a   @ 0x3000  =  {18, 36, 67}','v   @ 0x4000  =  {18, 36, 67}   (bản chép)'];
+},{id:'v_cost',
+  sub:[{at:.32,text:'Dữ liệu càng lớn thì cú chép này càng tốn kém.'},
+       {at:.7,text:'Vậy nếu ta chỉ muốn nhìn dữ liệu thôi thì sao?'}],code:'vec1',line:'end'});
+
+B(CH4,2.8,(t,pr)=>{ // v_amp — đổi sang const vector<int>&
+  const va=A('va').p,ft=A('fTang').p,vv=A('vv').p,fl=A('flow').p,sm=A('sum').p,cam=A('cam').p; ft.label='dem()';
+  WO.ambient.glow=1;va.o=1;elsOn(va,1);va.addrO=1;
+  const out=seg(t,.15,.55,eio);
+  ft.o=1-out;ft.y=TANG_Y-40*eo(out);
+  vv.o=1-out;vv.y=TANG_Y-40*eo(out);
+  fl.o=0;sm.o=0;
+  WO.ambient.dim=.32*(1-seg(t,0,.45));
+  cam.x=0;cam.y=lerp(185,150,eioq(t));cam.zoom=lerp(1.02,1.26,eioq(t));cam.ox=W<900?60:150;
+  if(pr<.15&&t>=.15)sfx.down();
+},{id:'v_amp',sub:[{at:.45,text:'Chỉ cần thêm <code>const</code> và dấu <code>&amp;</code> vào trước tên v.'}],code:'vec2',line:'sig'});
+
+B(CH4,2.6,(t,pr)=>{ // v_call2 — gọi lại y chang
+  const va=A('va').p,ft=A('fTang').p,cam=A('cam').p; ft.label='dem()';
+  WO.ambient.glow=1;va.o=1;elsOn(va,1);va.addrO=1;
+  cam.x=0;cam.y=lerp(150,40,eioq(seg(t,.1,.85)));cam.zoom=lerp(1.26,1.0,eioq(seg(t,.1,.85)));cam.ox=W<900?60:150;
+  ft.o=seg(t,.3,.75);ft.s=lerp(.94,1,eo(seg(t,.3,.8)));ft.wx=lerp(.45,1,eo(seg(t,.3,.9)));ft.y=TANG_Y+lerp(26,0,eo(seg(t,.3,.8)));
+  if(pr<.32&&t>=.32)sfx.create();
+},{id:'v_call2',sub:[{at:.45,text:'Gọi lại hàm dem y chang như lúc nãy.'}],code:'vec2',line:'call'});
+
+B(CH4,3.2,(t,pr)=>{ // v_bind — v nhìn vào a, KHÔNG chép
+  const va=A('va').p,ft=A('fTang').p,nn=A('nname').p,rl=A('rlink').p,cam=A('cam').p; ft.label='dem()';
+  WO.ambient.glow=1;va.o=1;elsOn(va,1);va.addrO=1;ft.o=1;ft.s=1;ft.y=TANG_Y;
+  cam.x=0;cam.y=lerp(40,30,eioq(t));cam.zoom=lerp(1.0,1.06,eioq(t));cam.ox=W<900?60:150;
+  nn.text='v';
+  nn.o=seg(t,.1,.4);nn.emph=pulse(t,.15,.5);
+  rl.x1=0;rl.y1=TANG_Y+30;rl.x2=0;rl.y2=MAIN_Y-72;rl.cx2=150;rl.cy2=40;
+  rl.o=seg(t,.42,.62);rl.prog=seg(t,.42,.85,eio);
+  if(pr<.42&&t>=.42)sfx.link();
+},{id:'v_bind',
+  sub:[{at:.2,text:'v không hề có chỗ chứa nào mới cả.'},
+       {at:.62,text:'<code>v</code> chỉ là cái tên để nhìn thẳng vào vector a.'}],code:'vec2',line:'sig'});
+
+B(CH4,3.4,(t)=>{ // v_const — const chặn mọi ý đồ sửa
+  const va=A('va').p,ft=A('fTang').p,nn=A('nname').p,rl=A('rlink').p,gh=A('ghost').p,cam=A('cam').p; ft.label='dem()';
+  WO.ambient.glow=1;va.o=1;elsOn(va,1);va.addrO=1;ft.o=1;ft.s=1;
+  nn.o=1;nn.text='v';rl.o=1;rl.prog=1;rl.active=1;rl.p1=-1;rl.flash=0;
+  cam.x=0;cam.y=lerp(30,55,eioq(seg(t,0,.6)));cam.zoom=lerp(1.06,1.12,eioq(seg(t,0,.6)));cam.ox=W<900?60:150;
+  gh.col=C.mag;gh.text='67';gh.s=.6;
+  const down=seg(t,.28,.46,eio);
+  const yy=down<1?lerp(TANG_Y+30,MAIN_Y-116,down):lerp(MAIN_Y-116,TANG_Y+30,seg(t,.58,.82,eio));
+  gh.x=0;gh.y=yy;
+  gh.o=seg(t,.24,.3)*(1-seg(t,.82,.92));
+  va.shield=pulse(t,.5,.88);va.emph=.3*pulse(t,.5,.75);
+  rl.flash=pulse(t,.24,.5);
+},{id:'v_const',
+  sub:[{at:.3,text:'Nếu trong hàm lỡ viết lệnh sửa v thì compiler chặn ngay tức khắc.'},
+       {at:.68,text:'<code>const</code> nghĩa là chỉ được đọc, không được đụng vào dữ liệu.'}],code:'vec2',line:'mid'});
+
+B(CH4,4.2,(t,pr)=>{ // v_done — kết luận vector
+  const va=A('va').p,ft=A('fTang').p,nn=A('nname').p,rl=A('rlink').p,sm=A('sum').p,cam=A('cam').p; ft.label='dem()';
+  WO.ambient.glow=1;
+  const out=seg(t,0,.35,eio);
+  ft.o=1-out;ft.y=TANG_Y-40*eo(out);
+  nn.o=1-out;rl.o=1-seg(t,0,.3);rl.active=0;rl.p1=-1;
+  va.o=1;elsOn(va,1);va.addrO=1;va.emph=.08;va.shield=0;
+  cam.x=0;cam.y=lerp(55,185,eioq(seg(t,.1,.7)));cam.zoom=lerp(1.12,1.05,eioq(seg(t,.1,.7)));cam.ox=W<900?60:150;
+  WO.ambient.dim=.32*seg(t,.25,.65);
+  sm.o=seg(t,.42,.8);sm.seg=seg(t,.42,.95,eio);
+  sm.x=0;sm.y=520;sm.size=22;
+  sm.lines=['a   @ 0x3000  =  {18, 36, 67}','v   chỉ là cái tên nhìn vào a'];
+  if(pr<.05&&t>=.05)sfx.down();
+},{id:'v_done',
+  sub:[{at:.35,text:'Không tốn một phép chép nào mà hàm vẫn đọc được đủ dữ liệu.'},
+       {at:.72,text:'Đây là tham chiếu hằng, tiếng Anh là <code>const reference</code>.'}],code:'vec2',line:'mid'});
+
+/* ================= CH5 — TỔNG KẾT ================= */
+B(CH5,2.8,(t,pr)=>{ // e0
+  const va=A('va').p,fm=A('fMain').p,sm=A('sum').p,cam=A('cam').p;
+  const out=seg(t,0,.45,eio);
+  va.o=1-out;va.y=MAIN_Y-150*eo(out);
+  fm.o=1-out;fm.y=MAIN_Y-110*eo(out);
+  sm.o=0;WO.ambient.dim=.32*(1-seg(t,0,.4));
+  WO.ambient.glow=lerp(1,.5,seg(t,.3,.9));
+  cam.x=0;
+  cam.y=lerp(185,30,eioq(seg(t,.05,.95)));
+  cam.zoom=lerp(1.05,.82,eioq(seg(t,.05,.95)));
+  cam.ox=lerp(W<900?60:150,0,seg(t,.05,.6));
+  const inn=seg(t,.35,.8,eio);
+  for(const id of['m1','m2','m3','m4']){const m=A(id).p;m.o=inn;m.s=lerp(.7,.88,eo(inn));m.labelO=0;}
+  if(pr<.08&&t>=.08)sfx.whoosh();
+},{id:'e0',sub:[{at:.5,text:'Giờ nhìn lại tất cả những gì mình đã đi qua nhé.'}],code:''});
+
+B(CH5,3.4,(t,pr)=>{ // e1
+  const cam=A('cam').p,m1=A('m1').p,m2=A('m2').p,m3=A('m3').p,m4=A('m4').p;
+  WO.ambient.glow=.5;m1.o=m2.o=m3.o=m4.o=1;m1.s=m2.s=m3.s=m4.s=.88;
+  cam.x=lerp(0,-570,eioq(seg(t,0,.8)));cam.y=30;cam.zoom=lerp(.82,.95,seg(t,0,.8));cam.ox=0;
+  m1.labelO=seg(t,.3,.6);m2.labelO=m3.labelO=m4.labelO=.2;
+  if(pr<.5&&t>=.5)sfx.reveal();
+},{id:'e1',
+  sub:[{at:.3,text:'Cách một là truyền tham trị, hàm nhận về một bản sao.'},
+       {at:.68,text:'Nên bản gốc của bạn luôn an toàn với cách này.'}],code:''});
+
+B(CH5,3.4,(t,pr)=>{ // e2
+  const cam=A('cam').p,m1=A('m1').p,m2=A('m2').p,m3=A('m3').p,m4=A('m4').p;
+  WO.ambient.glow=.5;m1.o=m2.o=m3.o=m4.o=1;m1.s=m2.s=m3.s=m4.s=.88;
+  cam.x=lerp(-570,-190,eioq(seg(t,0,.8)));cam.y=30;cam.zoom=.95;cam.ox=0;
+  m1.labelO=.2;m3.labelO=m4.labelO=.2;m2.labelO=seg(t,.3,.6);
+  if(pr<.5&&t>=.5)sfx.reveal();
+},{id:'e2',
+  sub:[{at:.3,text:'Cách hai là tham chiếu, hàm làm việc luôn trên bản gốc.'},
+       {at:.68,text:'Chỉ khác là hàm gọi nó bằng một cái tên khác mà thôi.'}],code:''});
+
+B(CH5,3.4,(t,pr)=>{ // e3
+  const cam=A('cam').p,m1=A('m1').p,m2=A('m2').p,m3=A('m3').p,m4=A('m4').p;
+  WO.ambient.glow=.5;m1.o=m2.o=m3.o=m4.o=1;m1.s=m2.s=m3.s=m4.s=.88;
+  cam.x=lerp(-190,190,eioq(seg(t,0,.8)));cam.y=30;cam.zoom=.95;cam.ox=0;
+  m1.labelO=m2.labelO=m4.labelO=.2;m3.labelO=seg(t,.3,.6);
+  if(pr<.5&&t>=.5)sfx.reveal();
+},{id:'e3',
+  sub:[{at:.3,text:'Cách ba là con trỏ, hàm nhận địa chỉ của bản gốc.'},
+       {at:.68,text:'Rồi hàm tự đi theo địa chỉ đó để tìm đến dữ liệu thật.'}],code:''});
+
+B(CH5,3.4,(t,pr)=>{ // e3b — ghé thế giới const reference
+  const cam=A('cam').p,m1=A('m1').p,m2=A('m2').p,m3=A('m3').p,m4=A('m4').p;
+  WO.ambient.glow=.5;m1.o=m2.o=m3.o=m4.o=1;m1.s=m2.s=m3.s=m4.s=.88;
+  cam.x=lerp(190,570,eioq(seg(t,0,.8)));cam.y=30;cam.zoom=.95;cam.ox=0;
+  m1.labelO=m2.labelO=m3.labelO=.2;m4.labelO=seg(t,.3,.6);
+  if(pr<.5&&t>=.5)sfx.reveal();
+},{id:'e3b',
+  sub:[{at:.3,text:'Còn riêng dữ liệu lớn như vector thì khác.'},
+       {at:.68,text:'Tham chiếu hằng là chuẩn mực, nhanh, nhẹ, và không sửa được.'}],code:''});
+
+B(CH5,3.2,(t)=>{ // e5 — kéo ra nhìn cả bốn
+  const cam=A('cam').p,m1=A('m1').p,m2=A('m2').p,m3=A('m3').p,m4=A('m4').p;
+  WO.ambient.glow=lerp(.5,.7,seg(t,0,.7));
+  m1.o=m2.o=m3.o=m4.o=1;
+  m1.s=m2.s=m3.s=m4.s=lerp(.88,1,eo(seg(t,0,.6)));
+  cam.x=lerp(570,0,eioq(seg(t,0,.75)));
+  cam.y=lerp(30,38,eioq(seg(t,0,.75)));
+  cam.zoom=lerp(.95,.68,eioq(seg(t,0,.75)));cam.ox=0;
+  const l=seg(t,.55,.9);
+  m1.labelO=m2.labelO=m3.labelO=m4.labelO=lerp(.2,1,l);
+},{id:'e5',sub:[{at:.4,text:'Bốn bức tranh này gói trọn cách C++ đưa dữ liệu vào hàm.'}],code:''});
+
+B(CH5,3.8,(t)=>{ // e6 — khoảnh khắc khái quát hoá
+  const cam=A('cam').p,m1=A('m1').p,m2=A('m2').p,m3=A('m3').p,m4=A('m4').p;
+  WO.ambient.glow=lerp(.7,.85,eio(t));
+  m1.o=m2.o=m3.o=m4.o=1;m1.s=m2.s=m3.s=m4.s=1;
+  m1.labelO=m2.labelO=m3.labelO=m4.labelO=1;
+  cam.x=0;cam.y=lerp(38,42,eio(t));
+  cam.zoom=lerp(.68,.66,eioq(t));cam.ox=0;
+},{id:'e6',
+  sub:[{at:.28,text:'Muốn an toàn thì chọn tham trị, muốn sửa dữ liệu thật thì chọn tham chiếu hoặc con trỏ.'},
+       {at:.64,text:'Còn chỉ cần đọc dữ liệu lớn thì cứ <code>const reference</code> nhé.'}],code:''});
+
+const TOTAL=beats.reduce((s,b)=>s+b.dur,0);
+const CUM=[];{let a=0;for(const b of beats){CUM.push(a);a+=b.dur;}}
+// segments cho progress bar
+const CHAPTERS=[];beats.forEach((b,i)=>{const last=CHAPTERS[CHAPTERS.length-1];
+  if(last&&last.ch===b.ch)last.end+=b.dur;else CHAPTERS.push({ch:b.ch,start:CUM[i],end:CUM[i]+b.dur});});
+
+// ============================================================
+//  CODE BOX (DOM)
+// ============================================================
+const CODE={
+  intro:{tag:'main.cpp',lines:[
+    {k:'decl',h:'<span class=k>int</span> x = <span class=n>18</span>;',b:'z_var'}]},
+  val:{tag:'pass_by_value.cpp',lines:[
+    {k:'sig', h:'<span class=k>void</span> rauma(<span class=k>int</span> n) {',b:'a_param'},
+    {k:'n20', h:'    n = <span class=n>36</span>;',b:'a_set'},
+    {k:'end', h:'}',b:'a_ret'},
+    {k:'b1',  h:' '},
+    {k:'main',h:'<span class=k>int</span> main() {'},
+    {k:'x10', h:'    <span class=k>int</span> x = <span class=n>18</span>;',b:'a_x'},
+    {k:'call',h:'    rauma(x);',b:'a_call'},
+    {k:'b2',  h:'}'}]},
+  ref:{tag:'reference.cpp',lines:[
+    {k:'sig', h:'<span class=k>void</span> rauma(<span class=k>int</span><span class=amp>&amp;</span> n) {',b:'r_amp'},
+    {k:'n20', h:'    n = <span class=n>36</span>;',b:'r_set'},
+    {k:'end', h:'}',b:'r_ret'},
+    {k:'b1',  h:' '},
+    {k:'main',h:'<span class=k>int</span> main() {'},
+    {k:'x10', h:'    <span class=k>int</span> x = <span class=n>18</span>;',b:'r_amp'},
+    {k:'call',h:'    rauma(x);',b:'r_call'},
+    {k:'b2',  h:'}'}]},
+  vec1:{tag:'pass_vector.cpp',lines:[
+    {k:'sig', h:'<span class=k>void</span> dem(<span class=k>vector&lt;int&gt;</span> v) {',b:'v_param'},
+    {k:'mid', h:'    <span class=cmt>// dùng v</span>'},
+    {k:'end', h:'}',b:'v_cost'},
+    {k:'b1',  h:' '},
+    {k:'main',h:'<span class=k>int</span> main() {'},
+    {k:'decl',h:'    <span class=k>vector&lt;int&gt;</span> a = {<span class=n>18</span>, <span class=n>36</span>, <span class=n>67</span>};',b:'v_show'},
+    {k:'call',h:'    dem(a);',b:'v_call'},
+    {k:'b2',  h:'}'}]},
+  vec2:{tag:'const_ref_vector.cpp',lines:[
+    {k:'sig', h:'<span class=k>void</span> dem(<span class=amp>const</span> <span class=k>vector&lt;int&gt;</span><span class=amp>&amp;</span> v) {',b:'v_bind'},
+    {k:'mid', h:'    <span class=cmt>// chỉ đọc dữ liệu từ v</span>',b:'v_const'},
+    {k:'end', h:'}',b:'v_done'},
+    {k:'b1',  h:' '},
+    {k:'main',h:'<span class=k>int</span> main() {'},
+    {k:'decl',h:'    <span class=k>vector&lt;int&gt;</span> a = {<span class=n>18</span>, <span class=n>36</span>, <span class=n>67</span>};',b:'v_show'},
+    {k:'call',h:'    dem(a);',b:'v_call2'},
+    {k:'b2',  h:'}'}]},
+  ptr:{tag:'pointer.cpp',lines:[
+    {k:'sig',  h:'<span class=k>void</span> rauma(<span class=k>int</span><span class=amp>*</span> p) {',b:'p_param'},
+    {k:'deref',h:'    <span class=amp>*</span>p = <span class=n>36</span>;',b:'p_deref1'},
+    {k:'end',  h:'}',b:'p_done'},
+    {k:'b1',   h:' '},
+    {k:'main', h:'<span class=k>int</span> main() {'},
+    {k:'x10',  h:'    <span class=k>int</span> x = <span class=n>18</span>;',b:'p_re'},
+    {k:'call', h:'    rauma(<span class=amp>&amp;</span>x);',b:'p_call'},
+    {k:'b2',   h:'}'}]}
+};
+const codebox=document.getElementById('codebox');
+let codeBlock=null,codeActive=null,codeCur=-1;
+function updateCode(blockKey,lineKey,curBeat){
+  if(blockKey!==codeBlock){
+    codeBlock=blockKey;codeActive=null;
+    if(!blockKey){codebox.classList.remove('show');codebox.innerHTML='';return;}
+    const def=CODE[blockKey];
+    codebox.innerHTML='<div class="cb-tag">'+def.tag+'</div>'+def.lines.map((l,i)=>{
+      const plain=l.h.replace(/<[^>]+>/g,'').replace(/&amp;/g,'&');
+      const n=Math.max(1,plain.length);
+      const blank=/^\s*$/.test(plain);
+      return `<div class="ln${l.b?' jump':''}${blank?' blank':''}" data-k="${l.k}" data-b="${l.b!==undefined?BI[l.b]:-1}" style="--n:${n};--d:${(i*0.07).toFixed(2)}s">${l.h}</div>`;
+    }).join('');
+    codebox.classList.add('show','typing');
+    setTimeout(()=>codebox.classList.remove('typing'),def.lines.length*70+700);
+    codebox.classList.remove('rebuild');void codebox.offsetWidth;codebox.classList.add('rebuild');
+    codebox.querySelectorAll('.ln.jump').forEach(el=>{
+      el.addEventListener('click',e=>{e.stopPropagation();wake();
+        const bi=+el.dataset.b;if(bi>=0)goBeat(bi);});
+    });
+  }
+  if(!blockKey)return;
+  if(lineKey!==codeActive||curBeat!==codeCur){
+    codeActive=lineKey;codeCur=curBeat;
+    codebox.querySelectorAll('.ln').forEach(el=>{
+      const k=el.dataset.k,b=+el.dataset.b;
+      el.classList.toggle('on',k===lineKey&&k!=='');
+      el.classList.add('typed');
+      el.classList.toggle('done',b>=0&&b<curBeat&&k!==lineKey);
+    });
+  }
+}
+
+// ============================================================
+//  VẼ — neon line art
+// ============================================================
+function rrPath(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function drawSpaced(text,x,y,spacing,font,fill,alpha){
+  if(alpha<=0.003)return;
+  ctx.save();ctx.font=font;ctx.textBaseline='middle';
+  const chars=[...text];const ws=chars.map(c=>ctx.measureText(c).width);
+  const total=ws.reduce((a,b)=>a+b,0)+spacing*(chars.length-1);
+  let cx=x-total/2;ctx.globalAlpha*=alpha;ctx.fillStyle=fill;ctx.textAlign='left';
+  chars.forEach((c,i)=>{ctx.fillText(c,cx,y);cx+=ws[i]+spacing;});
+  ctx.restore();
+}
+
+/* --- ô nhớ: TÊN / GIÁ TRỊ / ĐỊA CHỈ, 1 màu cố định --- */
+function primCell(p,alpha){
+  if(alpha<=0.003)return;
+  const {x,y,s,w,h}=p,col=p.col;
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.globalAlpha*=alpha;
+  const insp=p.insp||0;
+  const em=Math.max(p.emph,insp),vEm=Math.max(p.vEm,insp*.8),
+        aEm=Math.max(p.aEm,insp*.6),nEm=Math.max(p.nEm,insp*.6);
+  const eAll=Math.max(em,vEm,aEm);
+  // tên
+  if(p.name){
+    glow(0,-h/2-w*.13,30,col,.5*nEm);
+    ctx.font=`italic 600 ${w*.15}px ${F_SANS}`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=mixRgba([226,232,240,.95],col.concat(1),nEm*.9);
+    ctx.fillText(p.name,0,-h/2-w*.13);
+  }
+  // vỏ ô — panel + neon
+  if(p.ok>0.01)glow(0,0,w*1.1,C.green,.5*p.ok);
+  if(eAll>0.01)glow(0,0,w*.95,col,.4*eAll);
+  rrPath(-w/2,-h/2,w,h,16);
+  ctx.fillStyle='rgba(11,17,32,.9)';ctx.fill();
+  rrPath(-w/2,-h/2,w,h,16);
+  neonStroke(mixRgbaArr(col,Math.max(.28,eAll)),1.6,.95,9,.14+eAll*.14);
+  if(p.ring>0.002&&p.ring<0.999){
+    ctx.beginPath();ctx.arc(0,0,lerp(w*.66,w*1.4,p.ring),0,Math.PI*2);
+    neonStroke(C.green,1.6,.55*(1-p.ring),8,.14*(1-p.ring));
+  }
+  // giá trị
+  const shown=p.valT>0.5?p.valB:p.valA;
+  const isAddr=/^0x/.test(shown||'');
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  if(!shown){
+    ctx.save();ctx.setLineDash([7,7]);
+    rrPath(-w/2+16,-h/2+16,w-32,h-32,10);
+    ctx.strokeStyle=rgba(C.slate,.14+aEm*.3);ctx.lineWidth=1.2;ctx.stroke();ctx.restore();
+  }else{
+    if(vEm>0.01)glow(0,0,w*.5,isAddr?col:C.amber,.55*vEm);
+    const vs=isAddr?w*.17:w*.25;
+    ctx.font=`600 ${vs}px ${F_MONO}`;
+    if(p.valT>0.001&&p.valT<0.999&&p.valB!==p.valA){
+      ctx.fillStyle='#f4f7fb';
+      ctx.save();ctx.globalAlpha*=1-p.valT;
+      ctx.fillText(p.valA,0,-vs*.3*p.valT);ctx.restore();
+      ctx.save();ctx.globalAlpha*=p.valT;ctx.translate(0,vs*.28*(1-p.valT));
+      ctx.scale(.94+.06*p.valT,.94+.06*p.valT);ctx.fillText(p.valB,0,0);ctx.restore();
+    }else{
+      ctx.fillStyle=isAddr?mixRgba(col.concat(.95),[255,255,255,1],vEm*.4)
+                          :mixRgba([244,247,251,1],[255,255,255,1],vEm*.5);
+      ctx.fillText(shown,0,0);
+    }
+  }
+  // địa chỉ
+  if(p.addr&&p.addrO>0.003){
+    ctx.globalAlpha*=p.addrO;
+    ctx.strokeStyle=rgba(col,.3);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,h/2+4);ctx.lineTo(0,h/2+16);ctx.stroke();
+    glow(0,h/2+w*.125,34,col,.5*aEm);
+    ctx.font=`500 ${w*.085}px ${F_MONO}`;
+    ctx.fillStyle=mixRgba(col.concat(.9),[255,255,255,1],aEm*.5);
+    ctx.fillText('@ '+p.addr,0,h/2+w*.125);
+  }
+  ctx.restore();
+}
+function mixRgbaArr(col,a){return[col[0],col[1],col[2],a];}
+
+/* --- stack frame: panel tối + line slate --- */
+function primFrame(p,alpha){
+  if(alpha<=0.003)return;
+  ctx.save();ctx.translate(p.x,p.y);ctx.scale(p.s*(p.wx||1),p.s);ctx.globalAlpha*=alpha;
+  rrPath(-p.w/2,-p.h/2,p.w,p.h,22);
+  ctx.fillStyle='rgba(11,17,32,.5)';ctx.fill();
+  rrPath(-p.w/2,-p.h/2,p.w,p.h,22);
+  neonStroke(C.slate,1.2,.3,7,.06);
+  ctx.font=`600 15px ${F_MONO}`;ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(160,170,185,.8)';
+  ctx.fillText(p.label,-p.w/2+20,-p.h/2+26);
+  ctx.strokeStyle='rgba(148,163,184,.1)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(-p.w/2+14,-p.h/2+44);ctx.lineTo(p.w/2-14,-p.h/2+44);ctx.stroke();
+  if(p.tag){
+    ctx.save();ctx.translate(-p.w/2-24,0);ctx.rotate(-Math.PI/2);
+    drawSpaced('STACK',0,0,12,`600 12px ${F_SANS}`,'rgba(170,182,198,.75)',1);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function primLabelChip(text,x,y,o,colRGB){
+  if(o<=0.003)return;
+  ctx.save();ctx.globalAlpha*=o;
+  ctx.font=`600 14.5px ${F_SANS}`;
+  const tw=ctx.measureText(text).width;
+  const pad=11,w2=tw+pad*2,h2=28;
+  rrPath(x+14,y-h2/2,w2,h2,14);
+  ctx.fillStyle='rgba(11,17,32,.85)';ctx.fill();
+  rrPath(x+14,y-h2/2,w2,h2,14);
+  neonStroke(colRGB,1,.8,5,.2);
+  ctx.fillStyle=rgba(colRGB,.98);
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(text,x+14+w2/2,y+.5);
+  ctx.restore();
+}
+
+/* --- đường cong phải: tránh đè chữ địa chỉ dưới mỗi ô --- */
+function laneBuild(p){
+  const x1=p.x1,y1=p.y1,x2=p.x2,y2=p.y2;
+  const cx=(x1+x2)/2+30,cy=(y1+y2)/2;
+  const pts=[];let len=0;
+  for(let i=0;i<=48;i++){const t=i/48,u=1-t;
+    const x=u*u*x1+2*u*t*cx+t*t*x2,y=u*u*y1+2*u*t*cy+t*t*y2;
+    if(i)len+=Math.hypot(x-pts[i-1][0],y-pts[i-1][1]);pts.push([x,y]);}
+  return{pts,len,x2,y2,ang:Math.atan2(y2-cy,x2-cx)};
+}
+function laneAt(L,s){
+  const d=clamp(s,0,1)*L.len;let aa=0;
+  for(let i=1;i<L.pts.length;i++){
+    const sl=Math.hypot(L.pts[i][0]-L.pts[i-1][0],L.pts[i][1]-L.pts[i-1][1]);
+    if(aa+sl>=d){const f=(d-aa)/(sl||1);
+      return[lerp(L.pts[i-1][0],L.pts[i][0],f),lerp(L.pts[i-1][1],L.pts[i][1],f)];}
+    aa+=sl;}
+  return L.pts[L.pts.length-1];
+}
+function laneStroke(L,prog){
+  ctx.beginPath();
+  const maxD=clamp(prog,0,1)*L.len;let acc=0;ctx.moveTo(L.pts[0][0],L.pts[0][1]);
+  for(let i=1;i<L.pts.length;i++){
+    const sl=Math.hypot(L.pts[i][0]-L.pts[i-1][0],L.pts[i][1]-L.pts[i-1][1]);
+    if(acc+sl>=maxD){const f=(maxD-acc)/(sl||1);
+      ctx.lineTo(lerp(L.pts[i-1][0],L.pts[i][0],f),lerp(L.pts[i-1][1],L.pts[i][1],f));break;}
+    ctx.lineTo(L.pts[i][0],L.pts[i][1]);acc+=sl;}
+}
+function laneHead(L,ta,col){
+  if(ta<=0.003)return;
+  ctx.save();ctx.globalAlpha*=ta;ctx.translate(L.x2,L.y2);ctx.rotate(L.ang);
+  ctx.fillStyle=rgba(col,.95);
+  ctx.beginPath();ctx.moveTo(1,0);ctx.lineTo(-13,-6.5);ctx.lineTo(-13,6.5);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+/* --- mũi tên sao chép --- */
+function drawFlow(p,time){
+  if(p.o<=0.003||p.prog<=0.001)return;
+  ctx.save();ctx.globalAlpha*=p.o;
+  const fl=p.flash||0;
+  const L=laneBuild(p);
+  laneStroke(L,p.prog);
+  neonStroke(p.col,1.9,.9+fl*.1,10,.16+fl*.2);
+  laneHead(L,clamp((p.prog-0.7)/0.3,0,1),p.col);
+  if(p.prog>0.995){ // chấm sáng chạy dọc đường truyền
+    const q=laneAt(L,(time*.28)%1);
+    glow(q[0],q[1],22,p.col,.7);
+    ctx.fillStyle=rgba(p.col,.95);ctx.beginPath();ctx.arc(q[0],q[1],2.6,0,Math.PI*2);ctx.fill();
+  }
+  if(p.labelO>0.003){const m=laneAt(L,.5);primLabelChip(p.label,m[0]+12,m[1],p.labelO*Math.min(1,p.o),p.col);}
+  ctx.restore();
+}
+
+/* --- liên kết tham chiếu (magenta) --- */
+function drawRlink(p,time){
+  if(p.o<=0.003)return;
+  ctx.save();ctx.globalAlpha*=p.o;
+  const p0=[p.x1,p.y1],c=[p.cx2,p.cy2],p1=[p.x2,p.y2];
+  const pts=[];let len=0;
+  for(let i=0;i<=70;i++){const t=i/70,u=1-t;
+    const x=u*u*p0[0]+2*u*t*c[0]+t*t*p1[0],y=u*u*p0[1]+2*u*t*c[1]+t*t*p1[1];
+    if(i)len+=Math.hypot(x-pts[i-1][0],y-pts[i-1][1]);pts.push([x,y]);}
+  const fl=Math.max(p.flash||0,p.insp||0);
+  ctx.beginPath();
+  const maxD=p.prog*len;let acc=0;ctx.moveTo(pts[0][0],pts[0][1]);
+  let endPt=pts[0];
+  for(let i=1;i<pts.length;i++){
+    const sl=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+    if(acc+sl>=maxD){const f=(maxD-acc)/(sl||1);
+      endPt=[lerp(pts[i-1][0],pts[i][0],f),lerp(pts[i-1][1],pts[i][1],f)];
+      ctx.lineTo(endPt[0],endPt[1]);break;}
+    ctx.lineTo(pts[i][0],pts[i][1]);acc+=sl;endPt=pts[i];
+  }
+  neonStroke(p.col,1.8,.9,9,.15+fl*.25);
+  function at(s){const d=clamp(s,0,1)*len;let aa=0;
+    for(let i=1;i<pts.length;i++){const sl=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+      if(aa+sl>=d){const f=(d-aa)/(sl||1);return[lerp(pts[i-1][0],pts[i][0],f),lerp(pts[i-1][1],pts[i][1],f)];}
+      aa+=sl;}
+    return pts[pts.length-1];}
+  function dot(x,y,r,a){glow(x,y,26,p.col,a*.8);
+    ctx.fillStyle=rgba(p.col,a);ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
+  if(p.prog>0.995)dot(endPt[0],endPt[1],2.6,.9);
+  if(p.active&&p.prog>0.995){const q=at((time*.16+.3)%1);dot(q[0],q[1],2.2,.65);}
+  if(p.p1!=null&&p.p1>=0&&p.p1<=1&&p.prog>0.995){const q=at(p.p1);dot(q[0],q[1],4.2,1);}
+  ctx.restore();
+}
+
+/* --- mũi tên con trỏ p → x (violet) --- */
+function drawParrow(p,time){
+  if(p.o<=0.003||p.prog<=0.001)return;
+  ctx.save();ctx.globalAlpha*=p.o;
+  const insp=p.insp||0;
+  const L=laneBuild(p);
+  laneStroke(L,p.prog);
+  neonStroke(p.col,1.9,.9,10,.15+insp*.25);
+  laneHead(L,clamp((p.prog-0.7)/0.3,0,1),p.col);
+  if(p.labelO>0.003){const m=laneAt(L,.5);primLabelChip(p.label,m[0]+12,m[1],p.labelO*Math.min(1,p.o),p.col);}
+  if(p.pulse>=0&&p.pulse<=1&&p.prog>0.995){
+    for(let k=0;k<3;k++){
+      const ss=clamp(p.pulse-k*.04,0,1),aa=.95-k*.26;if(aa<=0)continue;
+      const q=laneAt(L,ss);
+      glow(q[0],q[1],34-k*6,p.col,aa*.85);
+      ctx.fillStyle=rgba(p.col,aa);
+      ctx.beginPath();ctx.arc(q[0],q[1],5.4-k*1.2,0,Math.PI*2);ctx.fill();
+    }
+  }
+  if(p.active&&p.prog>0.995){
+    const q=laneAt(L,(time*.2+.4)%1);
+    glow(q[0],q[1],20,p.col,.6);
+    ctx.fillStyle=rgba(p.col,.6);ctx.beginPath();ctx.arc(q[0],q[1],2.2,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawGhost(p){
+  if(p.o<=0.003)return;
+  ctx.save();ctx.globalAlpha*=p.o;ctx.translate(p.x,p.y);ctx.scale(p.s,p.s);
+  const isA=/^0x/.test(p.text);
+  glow(0,0,58,p.col,.85);
+  ctx.font=`600 ${isA?34:52}px ${F_MONO}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle=isA?'#efe9ff':'#fff7e6';
+  ctx.fillText(p.text,0,0);
+  ctx.restore();
+}
+
+function drawName(p,time){
+  if(p.o<=0.003)return;
+  const bob=Math.sin(time*1.1+p.ph)*3;
+  const em=Math.max(p.emph,p.insp||0);
+  ctx.save();ctx.globalAlpha*=p.o;
+  if(em>0.01)glow(p.x,p.y+bob,44,p.col,.6*em);
+  ctx.font=`italic 600 44px ${F_SANS}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle=mixRgba([232,236,240,.95],p.col.concat(1),em*.85);
+  ctx.fillText(p.text,p.x,p.y+bob);
+  ctx.restore();
+}
+
+function drawSum(p){
+  if(p.o<=0.003)return;
+  ctx.save();ctx.globalAlpha*=p.o;
+  ctx.font=`500 ${p.size}px ${F_MONO}`;ctx.textBaseline='middle';
+  const gap=p.size*2;
+  p.lines.forEach((ln,i)=>{
+    const a=seg(p.seg,i*.3,i*.3+.45,eo);
+    if(a<=0)return;
+    ctx.save();ctx.globalAlpha*=a;ctx.translate(0,(1-a)*10);
+    const y=p.y+i*gap;
+    ctx.textAlign='center';
+    ctx.fillStyle='rgba(210,220,233,.95)';
+    ctx.fillText(ln,p.x,y);
+    const re=/0x[0-9A-Fa-f]+/g;let m;
+    const full=ctx.measureText(ln).width;
+    while((m=re.exec(ln))){
+      const pre=ctx.measureText(ln.slice(0,m.index)).width;
+      glow(p.x-full/2+pre+ctx.measureText(m[0]).width/2,y,26,C.cyan,.5*a);
+      ctx.fillStyle=rgba(C.cyan,.98);ctx.textAlign='left';
+      ctx.fillText(m[0],p.x-full/2+pre,y);
+    }
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
+/* --- ba thế giới thu nhỏ --- */
+function miniCell(x,y,name,val,addr,col,o,em){
+  primCell({x,y,s:1,w:200,h:120,name,valA:val,valB:val,valT:0,addr,addrO:1,
+    nEm:em*.6,vEm:em,aEm:em*.7,emph:em*.4,ring:0,ok:0,insp:0,col},o);
+}
+function miniFrame(x,y,label,o){primFrame({x,y,w:330,h:212,label,o:1,s:1,tag:0},o*.85);}
+function miniArrow(x1,y1,y2,o,col,pulseT,time){
+  ctx.save();ctx.globalAlpha*=o;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x1,y2);
+  neonStroke(col,1.6,.85,8,.14);
+  const up=y2<y1;
+  ctx.fillStyle=rgba(col,.95);
+  ctx.save();ctx.translate(x1,y2);
+  ctx.beginPath();ctx.moveTo(0,0);
+  if(up){ctx.lineTo(-5,-11);ctx.lineTo(5,-11);}else{ctx.lineTo(-5,11);ctx.lineTo(5,11);}
+  ctx.closePath();ctx.fill();ctx.restore();
+  if(pulseT>0&&pulseT<1){
+    const y=y1+(y2-y1)*pulseT;
+    glow(x1,y,22,col,.8);
+    ctx.fillStyle=rgba(col,.95);ctx.beginPath();ctx.arc(x1,y,4,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+function drawMini(a,time){
+  const p=a.p;if(p.o<=0.003)return;
+  ctx.save();ctx.translate(p.x,p.y);ctx.scale(p.s,p.s);
+  const o=p.o,ph=(time/3.4+p.ph)%1;
+  if(p.type==='val'){
+    miniFrame(0,-128,'rauma()',o);
+    miniFrame(0,96,'main()',o);
+    miniCell(0,-128,'n','36','0x2000',C.amber,o,.05+.7*pulse(ph,.55,.82));
+    miniCell(0,96,'x','18','0x1000',C.cyan,o,.06);
+    miniArrow(58,26,-44,o,C.amber,seg(ph,.08,.5,eioq),time);
+  }
+  if(p.type==='ref'){
+    miniFrame(0,96,'main()',o);
+    miniFrame(0,-128,'rauma()',o);
+    miniCell(0,96,'x','36','0x1000',C.cyan,o,.06+.6*pulse(ph,.5,.78));
+    ctx.save();ctx.globalAlpha*=o;
+    glow(0,-118,34,C.mag,.4*pulse(ph,.15,.6));
+    ctx.font=`italic 600 34px ${F_SANS}`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(240,228,240,.95)';ctx.fillText('n',0,-118);
+    ctx.restore();
+    ctx.save();ctx.globalAlpha*=o*.9;
+    ctx.beginPath();ctx.moveTo(0,-94);ctx.quadraticCurveTo(90,-20,6,26);
+    neonStroke(C.mag,1.5,.85,8,.14);
+    const ss=(time*.2+.3)%1;
+    const qx=2*(1-ss)*ss*90+ss*ss*6,qy=(1-ss)*(1-ss)*-94+2*(1-ss)*ss*-20+ss*ss*26;
+    glow(qx,qy,18,C.mag,.6);
+    ctx.fillStyle=rgba(C.mag,.6);ctx.beginPath();ctx.arc(qx,qy,2.4,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+  if(p.type==='ptr'){
+    miniFrame(0,-128,'rauma()',o);
+    miniFrame(0,96,'main()',o);
+    miniCell(0,-128,'p','0x1000','0x2000',C.violet,o,.06);
+    miniCell(0,96,'x','36','0x1000',C.cyan,o,.05+.7*pulse(ph,.55,.82));
+    miniArrow(58,-58,26,o,C.violet,seg(ph,.1,.55,eio),time);
+  }
+  if(p.type==='cref'){
+    miniFrame(0,-128,'dem()',o);
+    miniFrame(0,96,'main()',o);
+    ctx.save();ctx.globalAlpha*=o;
+    const cw=232,cht=104;
+    glow(0,96,cw*.9,C.cyan,.22*pulse(ph,.55,.8));
+    rrPath(-cw/2,96-cht/2,cw,cht,14);
+    ctx.fillStyle='rgba(11,17,32,.9)';ctx.fill();
+    rrPath(-cw/2,96-cht/2,cw,cht,14);
+    neonStroke(mixRgbaArr(C.cyan,.4),1.4,.95,7,.12);
+    ctx.font=`italic 600 24px ${F_SANS}`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(226,232,240,.95)';ctx.fillText('a',0,96-cht/2-18);
+    const vals=['18','36','67'];let vx=-(3*54+2*10)/2;
+    ctx.font=`600 22px ${F_MONO}`;
+    for(const v of vals){
+      rrPath(vx,96-27,54,54,9);
+      ctx.fillStyle='rgba(5,9,24,.85)';ctx.fill();
+      rrPath(vx,96-27,54,54,9);
+      neonStroke(mixRgbaArr(C.cyan,.35),.9,.9,5,.1);
+      ctx.fillStyle='#f4f7fb';ctx.fillText(v,vx+27,97);
+      vx+=64;
+    }
+    ctx.font=`500 13px ${F_MONO}`;ctx.fillStyle='rgba(34,211,238,.85)';
+    ctx.fillText('@ 0x3000',0,96+cht/2+16);
+    ctx.restore();
+    ctx.save();ctx.globalAlpha*=o;
+    glow(0,-118,32,C.mag,.4*pulse(ph,.15,.6));
+    ctx.font=`italic 600 32px ${F_SANS}`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(240,228,240,.95)';ctx.fillText('v',0,-118);
+    ctx.beginPath();ctx.moveTo(0,-96);ctx.quadraticCurveTo(84,-20,24,46);
+    neonStroke(C.mag,1.4,.85,7,.13);
+    const cs=(time*.2+.3)%1;
+    const qx=2*(1-cs)*cs*84+cs*cs*24,qy=(1-cs)*(1-cs)*-96+2*(1-cs)*cs*-20+cs*cs*46;
+    glow(qx,qy,16,C.mag,.55);
+    ctx.fillStyle='rgba(244,114,182,.6)';ctx.beginPath();ctx.arc(qx,qy,2.2,0,Math.PI*2);ctx.fill();
+    // khiên const
+    ctx.translate(116,44);ctx.scale(.55,.55);
+    ctx.globalAlpha*=o*(.6+.4*pulse(ph,.6,.85));
+    glow(0,0,52,C.green,.5);
+    ctx.beginPath();
+    ctx.moveTo(0,-34);ctx.quadraticCurveTo(30,-22,30,2);
+    ctx.quadraticCurveTo(30,26,0,38);ctx.quadraticCurveTo(-30,26,-30,2);
+    ctx.quadraticCurveTo(-30,-22,0,-34);
+    neonStroke(C.green,2.2,.95,10,.18);
+    ctx.restore();
+  }
+  drawSpaced(p.label,0,262,9,`600 20px ${F_SANS}`,'rgba(226,233,244,.95)',o*p.labelO);
+  ctx.restore();
+}
+
+/* --- vector: một ô lớn nhiều ngăn --- */
+function primVec(p,alpha){
+  if(alpha<=0.003)return;
+  const {x,y,s}=p,col=p.col,w=330,h=128;
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.globalAlpha*=alpha;
+  const insp=p.insp||0;
+  const em=Math.max(p.emph,insp),aEm=Math.max(p.aEm,insp*.6),nEm=Math.max(p.nEm,insp*.6);
+  const eAll=Math.max(em,aEm);
+  if(p.name){
+    glow(0,-h/2-w*.1,30,col,.5*nEm);
+    ctx.font=`italic 600 ${w*.085}px ${F_SANS}`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=mixRgba([226,232,240,.95],col.concat(1),nEm*.9);
+    ctx.fillText(p.name,0,-h/2-w*.085);
+  }
+  if(p.shield>0.01){
+    glow(0,0,w*.75,C.green,.55*p.shield);
+    const ss=1+.06*Math.sin(p.shield*12);
+    ctx.save();ctx.scale(ss,ss);
+    ctx.beginPath();
+    ctx.moveTo(0,-34);
+    ctx.quadraticCurveTo(30,-22,30,2);
+    ctx.quadraticCurveTo(30,26,0,38);
+    ctx.quadraticCurveTo(-30,26,-30,2);
+    ctx.quadraticCurveTo(-30,-22,0,-34);
+    neonStroke(C.green,2.2,.95*p.shield,12,.2*p.shield);
+    ctx.restore();
+  }
+  if(eAll>0.01)glow(0,0,w*.9,col,.35*eAll);
+  rrPath(-w/2,-h/2,w,h,18);
+  ctx.fillStyle='rgba(11,17,32,.9)';ctx.fill();
+  rrPath(-w/2,-h/2,w,h,18);
+  neonStroke(mixRgbaArr(col,Math.max(.28,eAll)),1.6,.95,9,.14+eAll*.14);
+  // các ngăn phần tử
+  const n=p.els.length,sw=84,sh=84,gap=16;
+  const totalW=n*sw+(n-1)*gap;let sx=-totalW/2;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  for(const e of p.els){
+    if(e.o>0.003){
+      ctx.save();ctx.globalAlpha*=e.o;
+      rrPath(sx,-sh/2+8,sw,sh,12);
+      ctx.fillStyle='rgba(5,9,24,.85)';ctx.fill();
+      rrPath(sx,-sh/2+8,sw,sh,12);
+      neonStroke(mixRgbaArr(col,.35+e.em*.6),1,.9,6,.1+e.em*.2);
+      if(e.em>0.01)glow(sx+sw/2,8,sw*.7,C.green,.5*e.em);
+      ctx.font=`600 32px ${F_MONO}`;
+      ctx.fillStyle=mixRgba([244,247,251,1],[255,255,255,1],e.em*.5);
+      ctx.fillText(e.v,sx+sw/2,11);
+      ctx.restore();
+    }else{
+      ctx.save();ctx.setLineDash([6,6]);
+      rrPath(sx,-sh/2+8,sw,sh,12);
+      ctx.strokeStyle=rgba(C.slate,.12);ctx.lineWidth=1;ctx.stroke();ctx.restore();
+    }
+    sx+=sw+gap;
+  }
+  // địa chỉ
+  if(p.addr&&p.addrO>0.003){
+    ctx.globalAlpha*=p.addrO;
+    ctx.strokeStyle=rgba(col,.3);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,h/2+4);ctx.lineTo(0,h/2+14);ctx.stroke();
+    glow(0,h/2+24,34,col,.5*aEm);
+    ctx.font=`500 17px ${F_MONO}`;
+    ctx.fillStyle=mixRgba(col.concat(.9),[255,255,255,1],aEm*.5);
+    ctx.fillText('@ '+p.addr,0,h/2+26);
+  }
+  ctx.restore();
+}
+
+const DRAW={
+  cell:(a,t)=>primCell(a.p,a.p.o),
+  vec:(a,t)=>primVec(a.p,a.p.o),
+  frame:(a,t)=>primFrame(a.p,a.p.o),
+  flow:(a,t)=>drawFlow(a.p,t),
+  rlink:(a,t)=>drawRlink(a.p,t),
+  parrow:(a,t)=>drawParrow(a.p,t),
+  ghost:(a,t)=>drawGhost(a.p),
+  name:(a,t)=>drawName(a.p,t),
+  sum:(a,t)=>drawSum(a.p),
+  mini:(a,t)=>drawMini(a,t),
+};
+
+const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let RND={z:1,cx:0,cy:0,ox:0};
+let RC=null,SNAP=true; // camera thực (có damping)
+
+function draw(time){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#0a1330';ctx.fillRect(0,0,W,H);
+  glow(W*.55,H*.44,Math.max(W,H)*.72,C.cyan,.05);
+  glow(W*.18,H*.92,Math.max(W,H)*.55,C.violet,.045);
+
+  const cam=RC||A('cam').p;
+  const dr=reduced?0:1;
+  const dx=Math.sin(time*.21)*6*dr,dy=Math.cos(time*.17)*4.5*dr;
+
+  // lưới grid mờ alpha ~4%, parallax chậm
+  ctx.save();
+  const gs=54,off=-(cam.x*0.06)%gs,offy=-(cam.y*0.06)%gs;
+  ctx.strokeStyle='rgba(160,175,205,.068)';ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let gx=off;gx<W+gs;gx+=gs){ctx.moveTo(gx,0);ctx.lineTo(gx,H);}
+  for(let gy=offy;gy<H+gs;gy+=gs){ctx.moveTo(0,gy);ctx.lineTo(W,gy);}
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(W/2+cam.ox,H/2);
+  const z=cam.zoom*base*(1+.004*Math.sin(time*.13)*dr);
+  ctx.scale(z,z);
+  ctx.translate(-(cam.x+dx),-(cam.y+dy));
+  RND={z,cx:cam.x+dx,cy:cam.y+dy,ox:cam.ox};
+
+  if(WO.ambient.glow>0.003){
+    glow(0,20,620,C.cyan,.05*WO.ambient.glow);
+    glow(0,-100,880,C.violet,.035*WO.ambient.glow);
+  }
+  ctx.save();ctx.translate(cam.x*.62,cam.y*.62);
+  for(const d of DUST){
+    const tw=.35+.65*Math.abs(Math.sin(time*d.sp+d.ph));
+    ctx.fillStyle=`rgba(148,163,184,${(.06*tw).toFixed(3)})`;
+    ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+
+  const list=[...WO.actors.values()].filter(a=>a.kind!=='cam'&&a.p.o>0.002);
+  for(const a of list)DRAW[a.kind](a,time);
+  ctx.restore();
+
+  if(WO.ambient.dim>0.003){
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    ctx.fillStyle=`rgba(1,3,10,${WO.ambient.dim.toFixed(3)})`;
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+// ============================================================
+//  PHÁT / ĐIỀU KHIỂN
+// ============================================================
+const subEl=document.getElementById('sub'),subPill=document.getElementById('subpill'),
+      fillSegs=document.getElementById('segs'),chEl=document.getElementById('chLabel'),
+      tEl=document.getElementById('tLabel'),ppBtn=document.getElementById('pp'),
+      chCard=document.getElementById('chcard'),chPre=document.getElementById('chpre'),chBig=document.getElementById('chbig');
+
+let state='intro';
+let cur=0,beatTime=0,prevT=0,time=0,lastNow=performance.now();
+let lastMove=performance.now();
+let INSPECT={ids:[],until:0};
+let cardTimer=null;
+
+// progress segments
+CHAPTERS.forEach(ch=>{
+  const d=document.createElement('div');d.className='sg';
+  d.style.flex=((ch.end-ch.start)/TOTAL).toFixed(4);
+  d.innerHTML='<i></i><em>'+ch.ch.replace(/</g,'&lt;')+'</em>';
+  d.addEventListener('click',e=>{e.stopPropagation();wake();
+    const r=d.getBoundingClientRect();
+    seekTo(ch.start+clamp((e.clientX-r.left)/r.width,0,1)*(ch.end-ch.start));});
+  fillSegs.appendChild(d);
+});
+
+function showCard(chText){
+  const [pre,big]=chText.split('·').map(s=>s.trim());
+  chPre.textContent=pre?(pre.length<=3?'PHẦN '+pre:pre):'';
+  const esc=c=>c==='<'?'&lt;':c==='>'?'&gt;':c===' '?'&nbsp;':c;
+  chBig.innerHTML=[...(big||pre||'')].map((c,i)=>
+    `<span style="--d:${(0.05+i*0.045).toFixed(2)}s">${esc(c)}</span>`).join('');
+  chCard.classList.remove('show');void chCard.offsetWidth;chCard.classList.add('show');
+  clearTimeout(cardTimer);cardTimer=setTimeout(()=>chCard.classList.remove('show'),2100);
+}
+
+function setBody(){document.body.dataset.state=state;}
+function icon(){ppBtn.innerHTML=state==='play'
+  ?'<svg viewBox="0 0 12 12"><rect x="1.5" y="1" width="3.2" height="10" rx="1" fill="currentColor"/><rect x="7.3" y="1" width="3.2" height="10" rx="1" fill="currentColor"/></svg>'
+  :'<svg viewBox="0 0 12 12"><path d="M2.5 1.2v9.6c0 .8.9 1.3 1.6.9l7-4.8c.6-.4.6-1.4 0-1.8l-7-4.8c-.7-.4-1.6.1-1.6.9z" fill="currentColor"/></svg>';}
+
+let subShown=null,subToken=0;
+function swapSub(html){
+  if(html===subShown)return;subShown=html;const my=++subToken;
+  if(!html){subEl.classList.remove('show');return;}
+  if(subEl.classList.contains('show')){
+    subEl.classList.remove('show');
+    setTimeout(()=>{if(subToken!==my)return;subPill.innerHTML=html;subEl.classList.add('show');},240);
+  }else{subPill.innerHTML=html;requestAnimationFrame(()=>{if(subToken===my)subEl.classList.add('show');});}
+}
+function currentSubs(b,t){
+  if(typeof b.sub==='string')return b.sub||'';
+  let out='';for(const e of b.sub)if(t>=e.at)out=e.text;
+  return out;
+}
+
+function startBeat(i,silent){
+  const prevCh=cur>0?beats[cur].ch:null;
+  cur=i;beatTime=0;prevT=0;
+  const b=beats[i];
+  if(b.enter&&!silent)b.enter();
+  if(!silent&&i>0&&b.ch!==prevCh)showCard(b.ch);
+}
+function resim(idx){
+  buildWorld();SNAP=true;
+  for(let k=0;k<idx;k++)beats[k].fn(1,1);
+  startBeat(idx,true);
+}
+function goBeat(i){
+  codeBlock='__force__';
+  resim(clamp(i,0,beats.length-1));
+  if(state==='end'||state==='intro'){state='play';}
+  setBody();icon();
+}
+function finish(){state='end';setBody();icon();document.body.classList.remove('idle');}
+function togglePlay(){
+  if(state==='intro'){startFilm();return;}
+  if(state==='end'){goBeat(0);return;}
+  state=state==='play'?'pause':'play';
+  setBody();icon();
+  if(state==='pause')document.body.classList.remove('idle');
+}
+function startFilm(){
+  if(state!=='intro')return;
+  initAudio();
+  document.getElementById('intro').classList.add('gone');
+  state='play';setBody();icon();
+  resim(0);
+  beats[0].enter&&beats[0].enter();
+  showCard(CH0);
+}
+function seekTo(sec){
+  let i=0;while(i<beats.length-2&&CUM[i+1]<=sec)i++;
+  if(sec>=TOTAL-.05){resim(beats.length-1);beatTime=beats[beats.length-1].dur;finish();return;}
+  goBeat(i);beatTime=sec-CUM[i];
+}
+function fmt(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+
+/* --- click khám phá --- */
+function relates(id,zone){
+  const vis=i=>{const a=A(i);return a&&a.p.o>0.3;};
+  switch(id){
+    case 'cx':
+      if(zone==='addr'&&vis('cp'))return['cp','parrow'];
+      if(vis('parrow'))return['parrow','cp'];
+      if(vis('rlink'))return['rlink','nname'];
+      if(vis('flow'))return['flow','cn'];
+      return['cx'];
+    case 'cn':return vis('flow')?['flow','cx']:['cn'];
+    case 'va':
+      if(zone==='addr'&&vis('rlink'))return['rlink','nname'];
+      if(vis('rlink'))return['rlink','nname'];
+      if(vis('flow'))return['flow','vv'];
+      return['va'];
+    case 'vv':return vis('flow')?['flow','va']:['vv'];
+    case 'cp':return['parrow','cx'];
+    case 'parrow':return['cp','cx'];
+    case 'rlink':return['nname','cx'];
+    default:return[id];
+  }
+}
+function hitTest(wx,wy){
+  const order=['cp','cn','cx','vv','va','parrow','rlink'];
+  for(const id of order){
+    const a=A(id);if(!a||a.p.o<0.3)continue;const p=a.p;
+    if(a.kind==='vec'){
+      if(Math.abs(wx-p.x)<181&&wy>p.y-(64+48)&&wy<p.y+(64+48)){
+        const zone=wy>p.y+64?'addr':'box';
+        return{id,zone};
+      }
+      continue;
+    }
+    if(a.kind==='cell'){
+      const hw=p.w/2+16,hh=p.h/2+58;
+      if(Math.abs(wx-p.x)<hw&&wy>p.y-hh&&wy<p.y+hh){
+        const zone=wy>p.y+p.h/2?'addr':(wy<p.y-p.h/2?'name':'val');
+        return{id,zone};
+      }
+    }
+    if(a.kind==='parrow'&&p.prog>0.5){
+      if(Math.abs(wx-p.x1)<34&&wy>Math.min(p.y1,p.y2)-16&&wy<Math.max(p.y1,p.y2)+16)return{id,zone:''};
+    }
+    if(a.kind==='rlink'&&p.prog>0.5){
+      const mx=(p.x1+p.x2)/2;
+      if(Math.abs(wx-mx)<140&&wy>Math.min(p.y1,p.y2)-10&&wy<Math.max(p.y1,p.y2)+10)return{id,zone:''};
+    }
+  }
+  return null;
+}
+cv.addEventListener('click',e=>{
+  wake();
+  if(state!=='play'&&state!=='pause'){togglePlay();return;}
+  const wx=(e.clientX-(W/2+RND.ox))/RND.z+RND.cx;
+  const wy=(e.clientY-H/2)/RND.z+RND.cy;
+  const hit=hitTest(wx,wy);
+  if(hit){INSPECT={ids:relates(hit.id,hit.zone),until:time+2.2};sfx.link();}
+  else togglePlay();
+});
+function applyInspect(){
+  for(const a of WO.actors.values())if('insp'in a.p)a.p.insp=0;
+  if(time>INSPECT.until)return;
+  const ramp=Math.sin(clamp((INSPECT.until-time)*1.8,0,1)*Math.PI/2);
+  for(const id of INSPECT.ids){
+    const a=A(id);if(!a)continue;
+    if('insp'in a.p)a.p.insp=ramp*(.6+.4*Math.sin(time*6));
+  }
+}
+
+// ---------- vòng lặp chính (dt clamp + try/catch) ----------
+function tick(now){
+  try{
+    const dt=Math.min(.05,(now-lastNow)/1000);lastNow=now;time=now/1000;
+    if(state==='play'){
+      beatTime+=dt;
+      if(beatTime>=beats[cur].dur){
+        if(cur<beats.length-1)startBeat(cur+1);
+        else finish();
+      }
+    }
+    const b=beats[cur];
+    const t=clamp(beatTime/b.dur,0,1);
+    if(state==='intro')beats[0].fn(.5,.5);
+    else b.fn(t,prevT);
+    prevT=t;
+    applyInspect();
+
+    // camera damping mềm theo keyframe target
+    const cam=A('cam').p;
+    if(SNAP||!RC){RC={x:cam.x,y:cam.y,zoom:cam.zoom,ox:cam.ox};SNAP=false;}
+    else{const k=1-Math.exp(-dt*3.2);
+      RC.x+=(cam.x-RC.x)*k;RC.y+=(cam.y-RC.y)*k;
+      RC.zoom+=(cam.zoom-RC.zoom)*k;RC.ox+=(cam.ox-RC.ox)*k;}
+
+    if(state==='intro'){swapSub('');updateCode('','',cur);}
+    else{swapSub(currentSubs(b,t));updateCode(b.code,b.line,cur);}
+
+    chEl.textContent=b.ch;
+    const elapsed=CUM[cur]+Math.min(beatTime,b.dur);
+    tEl.textContent=fmt(elapsed)+' / '+fmt(TOTAL);
+    [...fillSegs.children].forEach((d,i)=>{
+      const c=CHAPTERS[i];
+      d.firstChild.style.width=(clamp((elapsed-c.start)/(c.end-c.start),0,1)*100).toFixed(1)+'%';
+    });
+
+    if(state==='play'&&now-lastMove>2400)document.body.classList.add('idle');
+    else document.body.classList.remove('idle');
+
+    draw(time);
+  }catch(err){
+    if(window.console)console.warn('frame skipped:',err);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ---------- tương tác ----------
+function wake(){lastMove=performance.now();}
+window.addEventListener('mousemove',wake);
+window.addEventListener('touchstart',wake,{passive:true});
+document.getElementById('wake').addEventListener('click',e=>{e.stopPropagation();wake();});
+ppBtn.addEventListener('click',e=>{e.stopPropagation();wake();togglePlay();});
+document.getElementById('start').addEventListener('click',e=>{e.stopPropagation();wake();startFilm();});
+document.getElementById('again').addEventListener('click',e=>{e.stopPropagation();wake();goBeat(0);});
+// chạm bất cứ đâu trên màn hình mở đầu / kết thúc cũng bắt đầu / xem lại
+document.getElementById('intro').addEventListener('click',()=>{wake();startFilm();});
+document.getElementById('endov').addEventListener('click',()=>{wake();if(state==='end')goBeat(0);});
+
+const FIRST={};beats.forEach((b,i)=>{if(!(b.ch in FIRST))FIRST[b.ch]=i;});
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();wake();togglePlay();return;}
+  if(state==='intro')return;
+  wake();
+  switch(e.code){
+    case 'ArrowRight':e.preventDefault();
+      if(state!=='end'&&cur<beats.length-1)goBeat(cur+1);break;
+    case 'ArrowLeft':e.preventDefault();
+      if(state==='end'){state='play';setBody();icon();}
+      if(beatTime>.7)resim(cur);else goBeat(Math.max(0,cur-1));
+      break;
+    case 'KeyR':goBeat(0);break;
+    case 'KeyF':
+      if(document.fullscreenElement)document.exitFullscreen();
+      else if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen();
+      break;
+    default:
+      if(/^Digit[1-5]$/.test(e.code))goBeat(FIRST[[CH1,CH2,CH3,CH4,CH5][+e.code.slice(5)-1]]);
+  }
+});
+
+// title intro: tách ký tự, reveal easeOutBack
+(function(){
+  const el=document.getElementById('title');
+  const txt=el.textContent;el.innerHTML=[...txt].map((c,i)=>
+    `<span style="--d:${(0.15+i*0.05).toFixed(2)}s">${c===' '?'&nbsp;':c}</span>`).join('');
+  requestAnimationFrame(()=>document.body.classList.add('ready'));
+})();
+
+// ---------- khởi động ----------
+resize();
+buildWorld();
+setBody();icon();
+requestAnimationFrame(tick);
+</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a28ccd8e59818610',t:'MTc4NjM0MTg2NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
