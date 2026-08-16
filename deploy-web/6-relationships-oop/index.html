@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>6 Mối Quan Hệ trong OOP — Học qua Animation</title>
+  <meta name="description" content="Trang học tương tác giúp hiểu trực quan Association, Dependency, Aggregation, Composition, Inheritance và Realization thông qua animation mô phỏng vòng đờii object." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ================= THANH TRÊN: TÊN TRANG + TIẾN TRÌNH + CÔNG CỤ ================= -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-badge"><i class="fa-solid fa-graduation-cap"></i></span>
+      <span class="brand-name">OOP Relationships</span>
+      <span class="brand-sub">học bằng animation</span>
+    </div>
+    <div class="top-actions">
+      <span id="progressLabel" class="progress-label">Hoàn thành 0/7</span>
+      <button id="speedBtn" class="btn btn-ghost" title="Bật/Tắt tốc độ animation (x1 ↔ x2)"><i class="fa-solid fa-bolt"></i> x1</button>
+      <button id="themeBtn" class="btn btn-ghost" title="Bật/Tắt Dark Mode"><i class="fa-solid fa-moon"></i></button>
+    </div>
+    <!-- thanh tiến trình học -->
+    <div class="progress"><div id="progressFill"></div></div>
+  </header>
+
+  <div class="layout">
+    <!-- ================= ĐIỀU HƯỚNG BÊN TRÁI ================= -->
+    <aside class="sidebar">
+      <div class="sidebar-title">LỘ TRÌNH HỌC</div>
+      <nav id="navList"><!-- JS sẽ sinh các mục điều hướng --></nav>
+    </aside>
+
+    <!-- ================= NỘI DUNG CHÍNH: CÁC SCENE ================= -->
+    <main id="main" class="main"><!-- JS sẽ sinh các panel scene --></main>
+  </div>
+
+  <noscript>Trang này cần JavaScript để chạy animation. Vui lòng bật JavaScript.</noscript>
+  <script src="script.js"></script>
+</body>
+</html>
