@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSS Injection Side-Channel — Educational Motion Graphics</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="app-container">
+    <!-- Primary Visual Stage: Canvas occupies >90% of viewport -->
+    <canvas id="canvas-stage"></canvas>
+
+    <!-- Minimal Top Banner -->
+    <div id="top-banner">
+      <div class="banner-badge">
+        <span class="pulse-dot"></span>
+        <span id="txt-banner-badge">Minh Họa Kiến Trúc</span>
+      </div>
+      <h1 id="txt-banner-title" class="banner-title">Kênh Kề CSS Injection</h1>
+      <p id="txt-banner-sub" class="banner-subtitle">Mô phỏng trực quan cơ chế trích xuất dữ liệu ngầm qua bộ chọn CSS</p>
+    </div>
+
+    <!-- Floating Minimal Playback Controls -->
+    <div id="bottom-bar">
+      <!-- Continuous progress scrubber -->
+      <div id="scrubber-track-container" class="scrubber-track-container" title="Kéo để tua hoạt cảnh">
+        <div id="scrubber-progress-fill" class="scrubber-progress-fill"></div>
+      </div>
+
+      <div class="controller-pill">
+        <div class="playback-buttons">
+          <!-- Restart -->
+          <button id="btn-restart" class="btn-ctrl" title="Bắt đầu lại (R)">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6 0 2.97-2.16 5.44-5 5.92v2.02c3.96-.49 7-3.86 7-7.94 0-4.42-3.58-8-8-8zM6 13c0-1.65.67-3.15 1.76-4.24l-1.42-1.42C4.9 8.78 4 10.78 4 13c0 4.08 3.04 7.45 7 7.94v-2.02C8.16 18.44 6 15.97 6 13z"/>
+            </svg>
+          </button>
+
+          <!-- Prev Scene -->
+          <button id="btn-prev" class="btn-ctrl" title="Cảnh trước (←)">
+            <svg viewBox="0 0 24 24">
+              <path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/>
+            </svg>
+          </button>
+
+          <!-- Play / Pause -->
+          <button id="btn-play-pause" class="btn-ctrl btn-primary" title="Tạm dừng (Space)">
+            <svg viewBox="0 0 24 24">
+              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+            </svg>
+          </button>
+
+          <!-- Next Scene -->
+          <button id="btn-next" class="btn-ctrl" title="Cảnh sau (→)">
+            <svg viewBox="0 0 24 24">
+              <path d="m6 18 8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Scene indicator text -->
+        <div class="scene-indicator-group">
+          <span id="scene-label-badge" class="scene-label-badge">Cảnh 1 / 11</span>
+          <span id="scene-title-badge" class="scene-title-badge">Ba Thế Giới Độc Lập</span>
+        </div>
+
+        <!-- Scene Timeline Dots Navigator -->
+        <div id="scene-dots-track" class="scene-dots-track">
+          <!-- Populated dynamically by main.js -->
+        </div>
+
+        <!-- Speed Toggle -->
+        <button id="btn-speed" class="speed-toggle" title="Tốc độ phát">1x</button>
+
+        <!-- Sound Toggle -->
+        <button id="btn-sound" class="btn-ctrl" title="Bật/Tắt âm thanh hiệu ứng">
+          <svg id="icon-sound-off" viewBox="0 0 24 24">
+            <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/>
+          </svg>
+          <svg id="icon-sound-on" viewBox="0 0 24 24" style="display: none;">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+        </button>
+
+        <!-- Language Toggle -->
+        <button id="btn-lang" class="speed-toggle" title="Switch Language / Đổi ngôn ngữ">VI</button>
+      </div>
+    </div>
+
+    <!-- Hotkey Tip -->
+    <div id="hotkey-hint">
+      <span id="txt-hotkey-label">Phím tắt:</span>
+      <span class="kbd-badge">Space</span>
+      <span id="txt-hotkey-space">Phát/Dừng</span>
+      <span class="kbd-badge">←</span>
+      <span class="kbd-badge">→</span>
+      <span id="txt-hotkey-nav">Đổi cảnh</span>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
