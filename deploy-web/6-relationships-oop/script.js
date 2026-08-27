@@ -13,7 +13,8 @@
 
    Luồng sư phạm của mỗi scene:
      [CÂU HỎI LỚN] → [▶ Xem câu chuyện animation]
-     → [Nút "Tiếp tục"] → [Mô phỏng vòng đờii: tự tay XÓA object & quan sát]
+     → [Nút "Tiếp tục"] → [Mô phỏng vòng đời: TỰ CHỌN object để xóa — mọi nút
+       xóa hiển thị cùng lúc, thử xong tự phục hồi để thử lựa chọn khác]
      → [Giải thích từng bullet + mẹo ghi nhớ]
    ========================================================================== */
 
@@ -232,7 +233,7 @@ function drawDiamond(ctx, x, y, ang, m, color, filled) {
 /** Đường nối UML (progress 0→1 để vẽ dần) */
 function connector(ctx, x1, y1, x2, y2, o = {}) {
   const { progress = 1, color = PAL.sub, width = 2.4, dash = false, label = '',
-          startMark = '', endMark = '', mark = 18, alpha = 1, labelDy = -16 } = o;
+          startMark = '', endMark = '', mark = 18, alpha = 1, labelDy = -16, labelDx = 0 } = o;
   if (progress <= 0 || alpha <= 0) return;
   const ex = lerp(x1, x2, progress), ey = lerp(y1, y2, progress);
   ctx.save(); ctx.globalAlpha = alpha;
@@ -247,11 +248,38 @@ function connector(ctx, x1, y1, x2, y2, o = {}) {
     if (startMark === 'dia-f') drawDiamond(ctx, x1, y1, ang, mark + 4, color, true);
   }
   if (label && progress > .5) {
-    ctx.globalAlpha = alpha * Math.min(1, (progress - .5) * 4);
+    const la = alpha * Math.min(1, (progress - .5) * 4);
+    ctx.globalAlpha = la;
     ctx.font = F(15, 700); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = color;
-    ctx.fillText(label, (x1 + x2) / 2, (y1 + y2) / 2 + labelDy);
+    const lx = (x1 + x2) / 2 + labelDx, ly = (y1 + y2) / 2 + labelDy;
+    ctx.fillText(label, lx, ly);
+    if (window.__captureRects && progress >= .99) {
+      const tw = ctx.measureText(label).width;
+      window.__captureRects.push({ kind: 'label', id: label, x: lx - tw / 2, y: ly - 14, w: tw, h: 18 });
+    }
   }
+  ctx.restore();
+}
+
+/* Nhãn UML có nền riêng (vd: "nhóm (không sở hữu)").
+   Được vẽ SAU cùng (trong drawExtras) nên không bao giờ bị card hay
+   đường nối che lại — khác với label trơn của connector(). */
+function drawLabelChip(ctx, x, y, text, color, alpha = 1) {
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = F(14.5, 700);
+  const w = ctx.measureText(text).width + 26, h = 30;
+  if (window.__captureRects && alpha >= .9)
+    window.__captureRects.push({ kind: 'chip', id: text, x: x - w / 2, y: y - h / 2, w, h });
+  ctx.shadowColor = PAL.shadow; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
+  rr(ctx, x - w / 2, y - h / 2, w, h, 15);
+  ctx.fillStyle = PAL.card; ctx.fill();
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y + 1);
   ctx.restore();
 }
 
@@ -262,6 +290,8 @@ function drawBadge(ctx, x, y, text, { color = '#10B981', alpha = 1, scale = 1 } 
   ctx.globalAlpha = alpha; ctx.translate(x, y); ctx.scale(scale, scale);
   ctx.font = F(18, 700);
   const w = ctx.measureText(text).width + 36, h = 40;
+  if (window.__captureRects && alpha >= .9)
+    window.__captureRects.push({ kind: 'badge', id: text, x: x - w / 2, y: y - h / 2, w, h });
   ctx.save();
   rr(ctx, -w / 2, -h / 2, w, h, 20);
   ctx.shadowColor = PAL.shadow; ctx.shadowBlur = 16; ctx.shadowOffsetY = 5;
@@ -274,15 +304,52 @@ function drawBadge(ctx, x, y, text, { color = '#10B981', alpha = 1, scale = 1 } 
   ctx.restore();
 }
 
-/** Card UML — "diễn viên" của mọi scene. Icon là glyph FontAwesome. */
+/** Card UML — "diễn viên" của mọi scene. Vẽ đúng chuẩn class diagram:
+    ┌──────────────────┐
+    │   «stereotype»   │   ← tùy chọn (vd «interface»)
+    │      TênLớp      │   ← đậm, căn giữa (+ icon nhỏ)
+    │     chú thích    │   ← nhỏ, mờ, căn giữa
+    ├──────────────────┤
+    │ - thuộc tính     │   ← ngăn thuộc tính
+    ├──────────────────┤
+    │ + phương thức()  │   ← ngăn phương thức
+    └──────────────────┘
+    Chiều cao tự tính theo nội dung (không bao giờ thấp hơn `h` truyền vào),
+    tên/chú thích quá dài tự thu nhỏ hoặc cắt "…" → không bao giờ tràn. */
 class Card {
   constructor(o) {
     Object.assign(this, {
-      x: 0, y: 0, w: 220, h: 120,
-      color: '#3B82F6', ico: ICO.user, title: '', sub: '', tag: '',
-      rows: null,                       // [{t:'name', inh:true, hl:0}]
+      x: 0, y: 0, w: 220, h: 0,
+      color: '#3B82F6', ico: ICO.user, title: '', sub: '', stereo: '',
+      attrs: [], methods: [],        // mỗi dòng: chuỗi 'teach()' hoặc {t, inh, hl}
       alpha: 1, scale: 1, shake: 0, shakeT: 0, glow: 0, visible: true,
     }, o);
+    /* dữ liệu ví dụ có thể thiếu attrs/methods → luôn đảm bảo là mảng */
+    this.attrs = this.attrs || [];
+    this.methods = this.methods || [];
+    this.measure();
+  }
+
+  /** Chiều cao các ngăn — tính một lần trong constructor. */
+  measure() {
+    this.headH = 10 + (this.stereo ? 17 : 0) + 27 + (this.sub ? 17 : 0) + 7;
+    this.rowH = 21;
+    const pad = 5;
+    this.need = this.headH
+      + (this.attrs.length   ? pad + this.attrs.length   * this.rowH + pad : 0)
+      + (this.methods.length ? pad + this.methods.length * this.rowH + pad : 0)
+      + 7;
+    this.h = Math.max(this.h || 0, this.need, 64);
+  }
+
+  /** Vẽ 1 dòng trong ngăn, tự cắt "…" nếu quá rộng. */
+  row(ctx, x, y, maxW, text) {
+    let t = text;
+    if (ctx.measureText(t).width > maxW) {
+      while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+      t += '…';
+    }
+    ctx.fillText(t, x, y);
   }
 
   draw(ctx) {
@@ -296,13 +363,22 @@ class Card {
     ctx.translate(this.x + sx, this.y + sy);
     ctx.scale(this.scale, this.scale);
 
-    const { w, h } = this, x = -w / 2, y = -h / 2, r = 16;
+    const { w, h } = this, x = -w / 2, y = -h / 2, r = 14;
 
     /* thân card + bóng mềm */
     ctx.save();
     rr(ctx, x, y, w, h, r);
     ctx.shadowColor = PAL.shadow; ctx.shadowBlur = 22; ctx.shadowOffsetY = 8;
     ctx.fillStyle = PAL.card; ctx.fill();
+    ctx.restore();
+
+    /* dải màu nhận diện ở đỉnh card + nền nhạt cho ngăn đầu */
+    ctx.save();
+    rr(ctx, x, y, w, h, r); ctx.clip();
+    ctx.fillStyle = hexA(this.color, .10);
+    ctx.fillRect(x, y, w, this.headH);
+    ctx.fillStyle = this.color;
+    ctx.fillRect(x, y, w, 3.5);
     ctx.restore();
 
     /* viền — sáng lên khi highlight (glow) */
@@ -316,51 +392,67 @@ class Card {
     }
     ctx.strokeStyle = PAL.line; ctx.lineWidth = 1.5; ctx.stroke();
 
-    /* icon FA trong đĩa tròn nhạt màu */
-    const ix = x + 40, iy = y + 42;
-    ctx.beginPath(); ctx.arc(ix, iy, 24, 0, TAU);
-    ctx.fillStyle = hexA(this.color, .14); ctx.fill();
-    ctx.fillStyle = this.color;
-    ctx.font = FA(23);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(this.ico, ix, iy + 1);
-
-    /* tên lớp + chú thích */
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = PAL.text; ctx.font = F(24, 800);
-    ctx.fillText(this.title, x + 76, y + 42);
-    ctx.fillStyle = PAL.sub; ctx.font = F(15, 600);
-    ctx.fillText(this.sub, x + 76, y + 65);
 
-    /* nhãn «interface» ở góc */
-    if (this.tag) {
-      ctx.font = F(14, 700);
-      const tw = ctx.measureText(this.tag).width + 20;
-      rr(ctx, x + w - tw - 10, y + 10, tw, 24, 12);
-      ctx.fillStyle = hexA(this.color, .15); ctx.fill();
-      ctx.fillStyle = this.color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(this.tag, x + w - tw / 2 - 10, y + 23);
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    /* «stereotype» — căn giữa phía trên tên */
+    let ny = y + (this.stereo ? 44 : 27);
+    if (this.stereo) {
+      ctx.font = F(12, 700); ctx.fillStyle = PAL.sub; ctx.textAlign = 'center';
+      ctx.fillText(this.stereo, 0, y + 24);
+      ctx.textAlign = 'left';
     }
 
-    /* danh sách thuộc tính / phương thức */
-    if (this.rows && this.rows.length) {
+    /* tên lớp + icon — căn giữa, tự thu nhỏ font nếu chật */
+    let fs = 19;
+    ctx.font = F(fs, 800);
+    let nw = ctx.measureText(this.title).width;
+    if (nw + 30 > w - 16) { fs = 16; ctx.font = F(fs, 800); nw = ctx.measureText(this.title).width; }
+    const gx = -(nw + 22) / 2;
+    ctx.font = FA(fs - 3); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = this.color;
+    ctx.fillText(this.ico, gx + 8, ny - fs * .34);
+    ctx.font = F(fs, 800); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = PAL.text;
+    ctx.fillText(this.title, gx + 22, ny);
+
+    /* chú thích nhỏ dưới tên — tự cắt "…" */
+    if (this.sub) {
+      ctx.font = F(12.5, 600); ctx.fillStyle = PAL.sub; ctx.textAlign = 'center';
+      this.row(ctx, 0, ny + 17, w - 18, this.sub);
+      ctx.textAlign = 'left';
+    }
+
+    /* các ngăn thuộc tính / phương thức */
+    const sep = yy => {
       ctx.strokeStyle = PAL.line; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(x + 14, y + 80); ctx.lineTo(x + w - 14, y + 80); ctx.stroke();
-      let ry = y + 100;
-      for (const row of this.rows) {
-        if (row.hl > 0) {                                   // dòng được highlight (đã kế thừa)
-          ctx.save(); ctx.globalAlpha *= row.hl;
-          rr(ctx, x + 10, ry - 16, w - 20, 26, 8);
+      ctx.beginPath(); ctx.moveTo(x + 10, yy); ctx.lineTo(x + w - 10, yy); ctx.stroke();
+    };
+    let ry = y + this.headH;
+    sep(ry);
+    const drawRows = (rows, prefix) => {
+      for (const r of rows) {
+        const o = typeof r === 'string' ? { t: r } : r;
+        const cy = ry + 15;
+        if (o.hl > 0) {                                    // dòng được highlight (kế thừa)
+          ctx.save(); ctx.globalAlpha *= o.hl;
+          rr(ctx, x + 8, cy - 14, w - 16, 21, 6);
           ctx.fillStyle = hexA(this.color, .18); ctx.fill();
           ctx.restore();
         }
-        ctx.fillStyle = row.inh ? this.color : PAL.text;
-        ctx.font = F(16, row.inh ? 700 : 600);
-        ctx.fillText((row.inh ? '↳ ' : '+ ') + row.t, x + 22, ry + 3);
-        ry += 29;
+        /* dòng kế thừa phân biệt bằng MÀU + CHỮ ĐẬM + nền highlight —
+           chuẩn UML không dùng ký tự mũi tên ↳ (dễ nhìn nhầm dấu xuống dòng) */
+        ctx.font = F(14, o.inh ? 700 : 600);
+        ctx.fillStyle = o.inh ? this.color : PAL.text;
+        ctx.fillText(prefix + o.t, x + 16, cy);
+        ry += this.rowH;
       }
-    }
+    };
+    if (this.attrs.length)   { ry += 5; drawRows(this.attrs, '- ');   ry += 5; sep(ry); }
+    if (this.methods.length) { ry += 5; drawRows(this.methods, '+ '); ry += 5; }
+
+    if (window.__captureRects && this.alpha > .85)
+      window.__captureRects.push({ kind: 'card', id: this.title,
+        x: this.x - w / 2, y: this.y - h / 2, w, h });
     ctx.restore();
   }
 }
@@ -387,7 +479,7 @@ class Scene {
       ch.addEventListener('click', () => this.switchExample(+ch.dataset.ex)));
   }
 
-  /* ---- vòng đờii khung ---- */
+  /* ---- vòng đời khung ---- */
   enter() { this.resize(); this.paintChips(); this.reset(true); }
   exit()  { this.engine.abort(); this.rejectPending(); }
 
@@ -403,12 +495,13 @@ class Scene {
 
   replay() { this.reset(false); this.start(); }
 
-  /** Đổi sang ví dụ khác rồi tự chạy luôn animation. */
+  /** Đổi sang ví dụ khác: quay về màn chờ (lớp phủ mờ + nút bấm) giống như
+      khi mới vào chủ đề — không tự động chạy animation nữa. */
   switchExample(i) {
+    if (i === this.exIdx && !this.running && !this.finished) return;
     this.exIdx = i;
     this.paintChips();
-    this.reset(false);
-    this.start();
+    this.reset(true);
     this.canvas.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
@@ -519,6 +612,7 @@ class Scene {
           + (a.kind === 'danger' ? 'btn-danger ' : a.kind === 'primary' ? 'btn-primary ' : '')
           + (a.pulse ? 'pulse' : '');
         b.innerHTML = a.label;
+        if (a.disabled) b.disabled = true;
         b.addEventListener('click', () => {
           this.actionsEl.innerHTML = '';
           this._pendingAction = null;
@@ -535,6 +629,26 @@ class Scene {
       id: 'go', kind: 'primary', pulse: true,
       label: 'Tiếp tục: thử XÓA object ' + fa('fa-arrow-right'),
     }]);
+  }
+
+  /** MÔ PHỎNG VÒNG ĐỜI "THÔNG MINH": mọi lựa chọn xóa hiển thị CÙNG LÚC —
+      người học TỰ CHỌN thứ tự, không còn cảnh "xóa hết cái này mới được
+      bấm cái kia". Cái nào đã thử sẽ mờ đi kèm dấu ✓. Mỗi lựa chọn chạy
+      hiệu ứng quan sát rồi TỰ PHỤC HỒI sân khấu để lựa chọn kế tiếp luôn
+      bắt đầu từ trạng thái nguyên vẹn.
+      steps: [{ id, label, run: async () => {} }] */
+  async simulate(steps) {
+    const done = new Set();
+    while (done.size < steps.length) {
+      const id = await this.actions(steps.map(s => ({
+        id: s.id,
+        kind: 'danger',
+        label: (done.has(s.id) ? fa('fa-circle-check') + ' ' : fa('fa-trash-can') + ' ') + s.label,
+        disabled: done.has(s.id),
+      })));
+      const step = steps.find(s => s.id === id);
+      if (step) { done.add(id); await step.run(); }
+    }
   }
 
   rejectPending() {
@@ -593,14 +707,16 @@ class Scene {
 class AssociationScene extends Scene {
   setup() {
     const { vw, vh } = this.M, e = this.E;
-    this.a = new Card({ x: vw * .26, y: vh * .52, w: 230, h: 126,
-      color: e.a.color, ico: e.a.ico, title: e.a.name, sub: e.a.sub });
-    this.b = new Card({ x: vw * .74, y: vh * .52, w: 230, h: 126,
-      color: e.b.color, ico: e.b.ico, title: e.b.name, sub: e.b.sub });
+    this.a = new Card({ x: vw * .26, y: vh * .5, w: 230, h: 120,
+      color: e.a.color, ico: e.a.ico, title: e.a.name, sub: e.a.sub,
+      attrs: e.a.attrs, methods: e.a.methods });
+    this.b = new Card({ x: vw * .74, y: vh * .5, w: 230, h: 120,
+      color: e.b.color, ico: e.b.ico, title: e.b.name, sub: e.b.sub,
+      attrs: e.b.attrs, methods: e.b.methods });
     this.link = { p: 0 };
   }
   drawLinks(c) {
-    connector(c, this.a.x + 118, this.a.y, this.b.x - 118, this.b.y,
+    connector(c, this.a.x + this.a.w / 2, this.a.y, this.b.x - this.b.w / 2, this.b.y,
       { progress: this.link.p, color: this.E.a.color, width: 3, label: 'biết nhau' });
   }
   async script() {
@@ -615,19 +731,24 @@ class AssociationScene extends Scene {
 
     await this.continueGate();
 
-    /* --- MÔ PHỎNG VÒNG ĐỜI: xóa từng phía và quan sát --- */
-    await this.actions([{ id: 'del', kind: 'danger', label: fa('fa-trash-can') + ` Xóa ${e.a.name}` }]);
-    await this.tw(this.link, { p: 0 }, 400);
-    this.destroy(this.a);
-    await this.cap(`<b>${e.b.name} vẫn tồn tại.</b>`, 1800);
-    await this.actions([{ id: 'reset', kind: 'primary', label: fa('fa-rotate-left') + ' Đặt lại' }]);
-    await this.popIn([this.a]);
-    await this.tw(this.link, { p: 1 }, 550);
-
-    await this.actions([{ id: 'del2', kind: 'danger', label: fa('fa-trash-can') + ` Xóa ${e.b.name}` }]);
-    await this.tw(this.link, { p: 0 }, 400);
-    this.destroy(this.b);
-    await this.cap(`<b>${e.a.name} vẫn tồn tại.</b>`, 1700);
+    /* --- MÔ PHỎNG VÒNG ĐỜI: 2 nút xóa hiện cùng lúc, tự chọn thứ tự --- */
+    await this.simulate([
+      { id: 'delA', label: `Xóa ${e.a.name}`, run: async () => {
+        await this.tw(this.link, { p: 0 }, 400);
+        this.destroy(this.a);
+        await this.cap(`<b>${e.b.name} vẫn tồn tại.</b>`, 1800);
+        /* tự phục hồi để thử lựa chọn còn lại từ trạng thái nguyên vẹn */
+        await this.popIn([this.a]);
+        await this.tw(this.link, { p: 1 }, 550);
+      } },
+      { id: 'delB', label: `Xóa ${e.b.name}`, run: async () => {
+        await this.tw(this.link, { p: 0 }, 400);
+        this.destroy(this.b);
+        await this.cap(`<b>${e.a.name} vẫn tồn tại.</b>`, 1800);
+        await this.popIn([this.b]);
+        await this.tw(this.link, { p: 1 }, 550);
+      } },
+    ]);
     await this.cap('Một đối tượng mất đi <b>không ảnh hưởng</b> đối tượng còn lại.<br>Đó là <b>Liên kết (Association)</b>.', 2200);
     this.finish();
   }
@@ -637,20 +758,30 @@ class AssociationScene extends Scene {
 class DependencyScene extends Scene {
   setup() {
     const { vw, vh } = this.M, e = this.E;
-    this.tool = new Card({ x: vw * .5, y: vh * .6, w: 250, h: 145,
-      color: e.tool.color, ico: e.tool.ico, title: e.tool.name, sub: e.tool.sub });
-    this.item = new Card({ x: -vw * .25, y: vh * .6, w: 210, h: 118,
-      color: e.item.color, ico: e.item.ico, title: e.item.name, sub: e.item.sub });
-    this.rest = { x: vw * .8, y: vh * .6 };
+    const mob = this.M.vw < 700;
+    this.tool = new Card({ x: vw * .5, y: vh * (mob ? .44 : .56), w: 250, h: 110,
+      color: e.tool.color, ico: e.tool.ico, title: e.tool.name, sub: e.tool.sub,
+      methods: e.tool.methods });
+    this.item = new Card({ x: -vw * .25, y: vh * (mob ? .44 : .56), w: 210, h: 100,
+      color: e.item.color, ico: e.item.ico, title: e.item.name, sub: e.item.sub,
+      attrs: e.item.attrs });
+    /* vị trí "nghỉ" của item sau khi dùng xong — tránh đè lên tool (đặc biệt trên mobile) */
+    this.rest = mob ? { x: vw * .78, y: vh * .66 } : { x: vw * .8, y: vh * .56 };
+    this.fly  = mob ? { x: vw * .5,  y: vh * .16 } : { x: vw * .5, y: vh * .18 };
     this.use = { p: 0, a: 1 };
     this.doing = { p: 0 };
   }
   drawLinks(c) {
-    connector(c, this.tool.x, this.tool.y - 74, this.item.x, this.item.y + 60,
+    const t = this.tool, it = this.item;
+    if (!t.visible || !it.visible) return;
+    const above = it.y + it.h / 2 < t.y;                 // item đang bay phía trên?
+    const s = above ? { x: t.x, y: t.y - t.h / 2 } : { x: t.x + t.w / 2, y: t.y };
+    const p = above ? { x: it.x, y: it.y + it.h / 2 } : { x: it.x - it.w / 2, y: it.y };
+    connector(c, s.x, s.y, p.x, p.y,
       { progress: this.use.p, color: '#D97706', dash: true, label: '«use»', alpha: this.use.a });
   }
   drawExtras(c) {
-    drawBadge(c, this.tool.x, this.tool.y - 118, this.E.doing,
+    drawBadge(c, this.tool.x, this.tool.y - this.tool.h / 2 - 34, this.E.doing,
       { color: '#D97706', alpha: this.doing.p, scale: lerp(.6, 1, this.doing.p) });
   }
   async script() {
@@ -658,7 +789,7 @@ class DependencyScene extends Scene {
     await this.popIn([this.tool]);
     await this.cap(e.story, 1100);
     await this.all([
-      this.tw(this.item, { x: this.tool.x, y: this.M.vh * .2 }, 900, 'inOutCubic'),
+      this.tw(this.item, { x: this.fly.x, y: this.fly.y }, 900, 'inOutCubic'),
       this.tw(this.item, { alpha: 1, scale: 1 }, 500),
     ]);
     await this.tw(this.use, { p: 1 }, 500);
@@ -670,21 +801,29 @@ class DependencyScene extends Scene {
       this.tw(this.use, { p: 0 }, 450),
       this.tw(this.item, { x: this.rest.x, y: this.rest.y }, 900, 'inOutCubic'),
     ]);
-    await this.cap(`Xong việc, ${e.item.name} rờii đi — <b>${e.tool.name} không giữ ${e.item.name}.</b>`, 1800);
+    await this.cap(`Xong việc, ${e.item.name} rời đi — <b>${e.tool.name} không giữ ${e.item.name}.</b>`, 1800);
 
     await this.continueGate();
 
-    /* --- MÔ PHỎNG VÒNG ĐỜI --- */
-    await this.actions([{ id: 'del', kind: 'danger', label: fa('fa-trash-can') + ` Xóa ${e.item.name}` }]);
-    this.destroy(this.item);
-    await this.flash(this.tool, 1);
-    await this.cap(`<b>${e.tool.name} vẫn bình thường</b> — nó chỉ <b>mượn</b> ${e.item.name} lúc làm việc.`, 1900);
-    await this.actions([{ id: 'reset', kind: 'primary', label: fa('fa-rotate-left') + ' Đặt lại' }]);
-    this.item.x = this.rest.x; this.item.y = this.rest.y;
-    await this.popIn([this.item]);
-    await this.actions([{ id: 'del2', kind: 'danger', label: fa('fa-trash-can') + ` Xóa ${e.tool.name}` }]);
-    this.destroy(this.tool);
-    await this.cap(`<b>${e.item.name} vẫn tồn tại.</b> Quan hệ chỉ là <b>"dùng tạm"</b>.`, 2000);
+    /* --- MÔ PHỎNG VÒNG ĐỜI: 2 nút xóa hiện cùng lúc, tự chọn thứ tự --- */
+    await this.simulate([
+      { id: 'delItem', label: `Xóa ${e.item.name}`, run: async () => {
+        await this.tw(this.use, { p: 0 }, 350);
+        this.destroy(this.item);
+        await this.flash(this.tool, 1);
+        await this.cap(`<b>${e.tool.name} vẫn bình thường</b> — nó chỉ <b>mượn</b> ${e.item.name} lúc làm việc.`, 1900);
+        this.item.x = this.rest.x; this.item.y = this.rest.y;
+        await this.popIn([this.item]);
+        await this.tw(this.use, { p: 1 }, 450);
+      } },
+      { id: 'delTool', label: `Xóa ${e.tool.name}`, run: async () => {
+        await this.tw(this.use, { p: 0 }, 350);
+        this.destroy(this.tool);
+        await this.cap(`<b>${e.item.name} vẫn tồn tại.</b> Quan hệ chỉ là <b>"dùng tạm"</b>.`, 2000);
+        await this.popIn([this.tool]);
+        await this.tw(this.use, { p: 1 }, 450);
+      } },
+    ]);
     await this.cap('Đó là <b>Phụ thuộc (Dependency)</b> — mối quan hệ <b>lỏng lẻo nhất</b>.', 1800);
     this.finish();
   }
@@ -694,29 +833,52 @@ class DependencyScene extends Scene {
 class AggregationScene extends Scene {
   setup() {
     const { vw, vh } = this.M, e = this.E;
-    this.owner = new Card({ x: vw * .3, y: vh * .5, w: 260, h: 210,
-      color: e.owner.color, ico: e.owner.ico, title: e.owner.name, sub: e.owner.sub });
+    /* Bố cục "dàn hàng ngang": tổng thể ở trên, các phần tử xếp thành
+      một hàng ngang bên dưới — thoáng, đúng chuẩn vẽ UML, không chồng nhau. */
+    const mob = this.M.vw < 700;
+    this.owner = new Card({ x: vw * (mob ? .5 : .21), y: vh * (mob ? .17 : .24),
+      w: mob ? 240 : 260, h: 108,
+      color: e.owner.color, ico: e.owner.ico, title: e.owner.name, sub: e.owner.sub,
+      methods: e.owner.methods });
     this.members = [0, 1, 2].map(i => new Card({
-      x: vw * .72, y: vh * (.24 + i * .26), w: 210, h: 104, color: e.memberColor,
-      ico: e.memberIcos[i], title: e.base + ' ' + 'ABC'[i], sub: e.memberSub,
+      x: vw * (mob ? [.18, .5, .82][i] : [.25, .5, .75][i]),
+      y: vh * (mob ? .58 : .645),
+      w: mob ? 190 : 210, h: 116, color: e.memberColor,
+      ico: e.memberIcos[i], title: e.base + ' ' + 'ABC'[i],
+      attrs: e.memberAttrs, methods: e.memberMethods,
     }));
     this.links = [0, 0, 0];
     this.owner2 = null;
   }
   edge(card, side) {
-    return side === 'r' ? { x: card.x + card.w / 2, y: card.y } : { x: card.x - card.w / 2, y: card.y };
+    if (side === 'b') return { x: card.x, y: card.y + card.h / 2 };
+    return { x: card.x, y: card.y - card.h / 2 };
   }
   drawLinks(c) {
     const owner = this.owner2 && this.owner2.visible ? this.owner2 : this.owner;
     if (!owner || !owner.visible) return;
     this.members.forEach((t, i) => {
       if (!t.visible || this.links[i] <= 0) return;
-      const s = this.edge(owner, 'r'), p = this.edge(t, 'l');
+      const s = this.edge(owner, 'b'), p = this.edge(t, 't');
       connector(c, s.x, s.y, p.x, p.y, {
         progress: this.links[i], color: this.E.owner.color, width: 2.6,
-        startMark: 'dia-h', label: this.links[i] >= 1 && i === 1 ? 'nhóm (không sở hữu)' : '',
+        startMark: 'dia-h',
       });
     });
+  }
+  drawExtras(c) {
+    /* Nhãn giải thích: vẽ SAU các card, có nền riêng → không bị che nữa.
+       Nổi dần khi đường nối giữa hoàn tất. */
+    const owner = this.owner2 && this.owner2.visible ? this.owner2 : this.owner;
+    const t = this.members[1];
+    if (!owner || !owner.visible || !t || !t.visible) return;
+    const a = Math.max(0, Math.min(1, (this.links[1] - .8) * 5));
+    if (a <= 0) return;
+    const s = this.edge(owner, 'b'), p = this.edge(t, 't');
+    /* kẹp chip luôn nằm dưới đáy owner (kể cả khi các phần tử nhích gần lại) */
+    const chipY = Math.max((s.y + p.y) / 2 - 30, s.y + 23);
+    drawLabelChip(c, (s.x + p.x) / 2, chipY,
+      'nhóm (không sở hữu)', this.E.owner.color, a);
   }
   async script() {
     const e = this.E;
@@ -729,20 +891,32 @@ class AggregationScene extends Scene {
 
     await this.continueGate();
 
-    /* --- MÔ PHỎNG VÒNG ĐỜI --- */
-    await this.actions([{ id: 'del', kind: 'danger', label: fa('fa-trash-can') + ` Xóa ${e.owner.name}` }]);
-    await this.all(this.links.map((_, i) => this.tw(this.links, { [i]: 0 }, 350)));
-    this.destroy(this.owner);
-    for (const t of this.members) { t.shake = .7; }
-    await this.cap(`${e.owner.name} biến mất… <b>các ${e.base} vẫn ở yên.</b>`, 1900);
-    this.owner2 = new Card({ x: this.owner.x, y: this.owner.y, w: 260, h: 210,
-      color: e.owner2.color, ico: e.owner2.ico, title: e.owner2.name, sub: e.owner2.sub });
-    await this.popIn([this.owner2]);
-    await this.all(this.members.map((t, i) => this.all([
-      this.tw(t, { x: t.x - this.M.vw * .1 }, 800, 'inOutCubic'),
-      this.tw(this.links, { [i]: 1 }, 800),
-    ])));
-    await this.cap(e.moved, 2100);
+    /* --- MÔ PHỎNG VÒNG ĐỜI: các nút xóa hiện cùng lúc, tự chọn thứ tự --- */
+    await this.simulate([
+      { id: 'delOwner', label: `Xóa ${e.owner.name}`, run: async () => {
+        await this.all(this.links.map((_, i) => this.tw(this.links, { [i]: 0 }, 350)));
+        this.destroy(this.owner);
+        for (const t of this.members) { t.shake = .7; }
+        await this.cap(`${e.owner.name} biến mất… <b>các ${e.base} vẫn ở yên.</b>`, 1900);
+        this.owner2 = new Card({ x: this.owner.x, y: this.owner.y, w: this.owner.w, h: this.owner.h,
+          color: e.owner2.color, ico: e.owner2.ico, title: e.owner2.name, sub: e.owner2.sub,
+          methods: e.owner.methods });
+        await this.popIn([this.owner2]);
+        await this.all(this.members.map((t, i) => this.all([
+          this.tw(t, { y: t.y - 60 }, 800, 'inOutCubic'),
+          this.tw(this.links, { [i]: 1 }, 800),
+        ])));
+        await this.cap(e.moved, 2100);
+      } },
+      { id: 'delMember', label: `Xóa một ${e.base}`, run: async () => {
+        const i = 1;
+        await this.tw(this.links, { [i]: 0 }, 350);
+        this.destroy(this.members[i]);
+        await this.cap(`Chỉ một ${e.base} mất — <b>tổng thể và các ${e.base} khác vẫn bình thường.</b>`, 2000);
+        await this.popIn([this.members[i]]);
+        await this.tw(this.links, { [i]: 1 }, 500);
+      } },
+    ]);
     await this.cap('Phần tử <b>sống độc lập</b> với tổng thể → <b>Kết tập (Aggregation)</b>.', 1900);
     this.finish();
   }
@@ -752,18 +926,31 @@ class AggregationScene extends Scene {
 class CompositionScene extends Scene {
   setup() {
     const { vw, vh } = this.M, e = this.E;
-    this.whole = new Card({ x: vw * .5, y: vh * .52, w: 330, h: 260,
-      color: e.whole.color, ico: e.whole.ico, title: e.whole.name, sub: e.whole.sub });
-    this.part = new Card({ x: vw * .5, y: vh * .52 + 66, w: 240, h: 96,
-      color: e.part.color, ico: e.part.ico, title: e.part.name, sub: e.part.sub });
+    const mob = this.M.vw < 700;
+    /* Hai class đặt CẠNH NHAU (không lồng vào nhau) — đúng chuẩn class diagram,
+      nối bằng hình thoi đặc ◆ phía tổng thể. */
+    this.whole = new Card({ x: vw * (mob ? .5 : .34), y: vh * (mob ? .3 : .5),
+      w: mob ? 260 : 280, h: 150,
+      color: e.whole.color, ico: e.whole.ico, title: e.whole.name, sub: e.whole.sub,
+      attrs: e.whole.attrs, methods: e.whole.methods });
+    this.part = new Card({ x: vw * (mob ? .5 : .72), y: vh * (mob ? .56 : .5),
+      w: mob ? 230 : 240, h: 110,
+      color: e.part.color, ico: e.part.ico, title: e.part.name, sub: e.part.sub,
+      attrs: e.part.attrs, methods: e.part.methods });
     this.link = { p: 0 };
   }
   drawLinks(c) {
     if (!this.whole.visible || !this.part.visible) return;
-    const y1 = this.whole.y - this.whole.h / 2 + 74;
-    const y2 = this.part.y - this.part.h / 2;
-    connector(c, this.whole.x, y1, this.whole.x, y2,
-      { progress: this.link.p, color: this.E.whole.color, width: 3, startMark: 'dia-f', label: 'sở hữu' });
+    const mob = this.M.vw < 700;
+    const s = mob
+      ? { x: this.whole.x, y: this.whole.y + this.whole.h / 2 }
+      : { x: this.whole.x + this.whole.w / 2, y: this.whole.y };
+    const p = mob
+      ? { x: this.part.x, y: this.part.y - this.part.h / 2 }
+      : { x: this.part.x - this.part.w / 2, y: this.part.y };
+    connector(c, s.x, s.y, p.x, p.y,
+      { progress: this.link.p, color: this.E.whole.color, width: 3, startMark: 'dia-f',
+        label: 'sở hữu', ...(mob ? { labelDx: 62, labelDy: 0 } : {}) });
   }
   async script() {
     const e = this.E;
@@ -773,21 +960,35 @@ class CompositionScene extends Scene {
     await this.tw(this.link, { p: 1 }, 500);
     await this.cap(`${e.whole.name} <b>sở hữu</b> ${e.part.name} — ký hiệu hình thoi đặc ◆.`, 1900);
     await this.all([this.flash(this.whole), this.flash(this.part)]);
-    await this.cap(`${e.part.name} là <b>một phần không thể tách rờii</b> của ${e.whole.name}.`, 1800);
+    await this.cap(`${e.part.name} là <b>một phần không thể tách rời</b> của ${e.whole.name}.`, 1800);
 
     await this.continueGate();
 
-    /* --- MÔ PHỎNG VÒNG ĐỜI: chết cùng nhau, chạy chậm --- */
-    await this.actions([{ id: 'del', kind: 'danger', label: fa('fa-trash-can') + ` Xóa ${e.whole.name}` }]);
-    await this.tw(this.whole, { alpha: .55 }, 900);
-    this.part.shake = 1.4;
-    await this.wait(900);
-    this.destroy(this.whole);
-    this.destroy(this.part);
-    await this.cap('<b>Sống cùng — chết cùng.</b>', 1700);
-    await this.cap(`<b>${e.part.name} không thể tồn tại nếu ${e.whole.name} không còn.</b><br>Đó là <b>Hợp thành (Composition)</b>.`, 2200);
-    await this.actions([{ id: 'reset', kind: 'primary', label: fa('fa-rotate-left') + ' Đặt lại' }]);
-    this.setup(); this.link.p = 1;
+    /* --- MÔ PHỎNG VÒNG ĐỜI: các nút xóa hiện cùng lúc, tự chọn thứ tự --- */
+    await this.simulate([
+      { id: 'delWhole', label: `Xóa ${e.whole.name}`, run: async () => {
+        await this.tw(this.whole, { alpha: .55 }, 900);
+        this.part.shake = 1.4;
+        await this.wait(900);
+        this.destroy(this.whole);
+        this.destroy(this.part);
+        await this.cap('<b>Sống cùng — chết cùng.</b>', 1700);
+        await this.cap(`<b>${e.part.name} không thể tồn tại nếu ${e.whole.name} không còn.</b>`, 2000);
+        /* dựng lại sân khấu nguyên vẹn để thử lựa chọn còn lại */
+        this.setup();
+        await this.popIn([this.whole, this.part]);
+        await this.tw(this.link, { p: 1 }, 500);
+      } },
+      { id: 'delPart', label: `Xóa ${e.part.name} (thử xem!)`, run: async () => {
+        await this.tw(this.link, { p: 0 }, 350);
+        this.destroy(this.part);
+        await this.flash(this.whole, 1);
+        await this.cap(`<b>${e.whole.name} vẫn tồn tại</b> — mất một bộ phận, tổng thể vẫn sống.<br>Chiều ngược lại mới hoàn toàn khác…`, 2300);
+        await this.popIn([this.part]);
+        await this.tw(this.link, { p: 1 }, 500);
+      } },
+    ]);
+    await this.cap('Đó là <b>Hợp thành (Composition)</b> — "sống cùng, chết cùng".', 1800);
     this.finish();
   }
 }
@@ -796,58 +997,87 @@ class CompositionScene extends Scene {
 class InheritanceScene extends Scene {
   setup() {
     const { vw, vh } = this.M, e = this.E;
-    const [r1, r2] = e.parent.rows;
-    this.parent = new Card({ x: vw * .5, y: vh * .16, w: 250, h: 138, color: e.parent.color,
+    const mob = this.M.vw < 700;
+    this.parent = new Card({ w: mob ? 240 : 230, color: e.parent.color,
       ico: e.parent.ico, title: e.parent.name, sub: 'lớp cha',
-      rows: [{ t: r1, hl: 0 }, { t: r2, hl: 0 }] });
-    this.child = new Card({ x: vw * .5, y: vh * .55, w: 280, h: 192, color: e.color,
+      attrs: e.parent.attrs, methods: e.parent.methods });
+    this.child = new Card({ w: mob ? 250 : 260, color: e.color,
       ico: e.child.ico, title: e.child.name, sub: 'lớp con',
-      rows: [{ t: r1, inh: true, hl: 0 }, { t: r2, inh: true, hl: 0 }, { t: e.child.new, hl: 0 }] });
-    this.grand = new Card({ x: vw * .5, y: vh * .89, w: 250, h: 108, color: e.color2,
+      attrs: [...e.parent.attrs.map(a => ({ t: a, inh: true, hl: 0 })), e.child.newAttr],
+      methods: [e.child.method] });
+    this.grand = new Card({ w: mob ? 230 : 220, color: e.color2,
       ico: e.grand.ico, title: e.grand.name, sub: 'lớp cháu',
-      rows: [{ t: e.grand.new, inh: true, hl: 0 }] });
+      methods: [{ t: e.child.method, inh: true, hl: 0 }, e.grand.newMethod] });
+    if (mob) {
+      /* điện thoại: xếp dọc, khoảng cách tính theo chiều cao THẬT của card
+         → không bao giờ bị dồn xuống đáy canvas đè lên caption/nút bấm */
+      const gap = 52;
+      this.parent.x = this.child.x = this.grand.x = vw * .5;
+      this.parent.y = 70 + this.parent.h / 2;
+      this.child.y  = this.parent.y + this.parent.h / 2 + gap + this.child.h / 2;
+      this.grand.y  = this.child.y + this.child.h / 2 + gap + this.grand.h / 2;
+    } else {
+      /* máy tính: chuỗi KẾ THỪA DÀN HÀNG NGANG cha → con → cháu */
+      this.parent.x = vw * .155; this.child.x = vw * .5; this.grand.x = vw * .845;
+      this.parent.y = this.child.y = this.grand.y = vh * .5;
+    }
     this.a1 = { p: 0 }; this.a2 = { p: 0 };
   }
   drawLinks(c) {
-    connector(c, this.child.x, this.child.y - this.child.h / 2,
-      this.parent.x, this.parent.y + this.parent.h / 2,
-      { progress: this.a1.p, color: this.E.color, width: 3, endMark: 'tri', mark: 22, label: 'kế thừa', labelDy: 26 });
-    connector(c, this.grand.x, this.grand.y - this.grand.h / 2,
-      this.child.x, this.child.y + this.child.h / 2,
-      { progress: this.a2.p, color: this.E.color, width: 3, endMark: 'tri', mark: 22 });
+    const mob = this.M.vw < 700;
+    if (mob) {
+      connector(c, this.child.x, this.child.y - this.child.h / 2,
+        this.parent.x, this.parent.y + this.parent.h / 2,
+        { progress: this.a1.p, color: this.E.color, width: 3, endMark: 'tri', mark: 22,
+          label: 'kế thừa', labelDy: 0, labelDx: -64 });
+      connector(c, this.grand.x, this.grand.y - this.grand.h / 2,
+        this.child.x, this.child.y + this.child.h / 2,
+        { progress: this.a2.p, color: this.E.color, width: 3, endMark: 'tri', mark: 22 });
+    } else {
+      connector(c, this.child.x - this.child.w / 2, this.child.y,
+        this.parent.x + this.parent.w / 2, this.parent.y,
+        { progress: this.a1.p, color: this.E.color, width: 3, endMark: 'tri', mark: 22,
+          label: 'kế thừa' });
+      connector(c, this.grand.x - this.grand.w / 2, this.grand.y,
+        this.child.x + this.child.w / 2, this.child.y,
+        { progress: this.a2.p, color: this.E.color, width: 3, endMark: 'tri', mark: 22 });
+    }
   }
   async script() {
-    const e = this.E, [r1, r2] = e.parent.rows;
+    const e = this.E, [r1, r2] = e.parent.attrs;
     await this.popIn([this.parent]);
     await this.cap(`${e.parent.name} có <b>${r1}</b> và <b>${r2}</b>.`, 1200);
     await this.popIn([this.child]);
     await this.tw(this.a1, { p: 1 }, 600, 'inOutCubic');
     await this.cap(`${e.child.name} <b>kế thừa (extends)</b> ${e.parent.name}.`, 1500);
-    for (const row of this.child.rows.slice(0, 2)) await this.tw(row, { hl: 1 }, 450);
-    await this.cap(`${e.child.name} nhận nguyên vẹn <b>${r1}</b>, <b>${r2}</b> — và tự thêm <b>${e.child.new}</b>.`, 1900);
+    for (const row of this.child.attrs.slice(0, 2)) await this.tw(row, { hl: 1 }, 450);
+    await this.cap(`${e.child.name} nhận nguyên vẹn <b>${r1}</b>, <b>${r2}</b> — và tự thêm <b>${e.child.newAttr}</b>.`, 1900);
     await this.popIn([this.grand]);
     await this.tw(this.a2, { p: 1 }, 600, 'inOutCubic');
-    await this.tw(this.grand.rows[0], { hl: 1 }, 400);
+    await this.tw(this.grand.methods[0], { hl: 1 }, 400);
     await this.cap(`${e.grand.name} lại kế thừa ${e.child.name}…`, 1300);
     await this.tw(this, { camT: 1 }, 900, 'inOutCubic');
     await this.cap('Một <b>cây kế thừa</b>: mọi thứ chảy từ trên xuống dưới.', 1800);
 
     await this.continueGate();
 
-    /* --- MÔ PHỎNG VÒNG ĐỜI --- */
-    await this.actions([{ id: 'del', kind: 'danger', label: fa('fa-trash-can') + ` Xóa ${e.child.name}` }]);
-    await this.all([this.tw(this.a1, { p: 0 }, 350), this.tw(this.a2, { p: 0 }, 350)]);
-    this.destroy(this.child);
-    await this.cap(`<b>${e.parent.name} vẫn tồn tại.</b> Kế thừa <b>không phải sở hữu.</b>`, 1900);
-    await this.actions([{ id: 'reset', kind: 'primary', label: fa('fa-rotate-left') + ' Đặt lại' }]);
-    this.child.visible = true; this.child.alpha = 0; this.child.scale = 0;
-    await this.popIn([this.child]);
-    await this.all([this.tw(this.a1, { p: 1 }, 500), this.tw(this.a2, { p: 1 }, 500)]);
-    await this.actions([{ id: 'delP', kind: 'danger', label: fa('fa-trash-can') + ` Xóa ${e.parent.name} (thử xem!)` }]);
-    this.parent.shake = 2.6; await this.tw(this.parent, { glow: 1 }, 300);
-    await this.cap(`${fa('fa-triangle-exclamation')} <b>${e.parent.name} là lớp cha</b> — xóa lớp cha <b>không</b> tự động xóa lớp con.<br>Đây chỉ là quan hệ "is-a" trong bản thiết kế.`, 2600, true);
-    await this.tw(this.parent, { glow: 0 }, 300);
-    await this.cap('<b>Inheritance ≠ Composition.</b> Kế thừa không có nghĩa "sở hữu vòng đờii".', 2000);
+    /* --- MÔ PHỎNG VÒNG ĐỜI: các nút xóa hiện cùng lúc, tự chọn thứ tự --- */
+    await this.simulate([
+      { id: 'delChild', label: `Xóa ${e.child.name}`, run: async () => {
+        await this.all([this.tw(this.a1, { p: 0 }, 350), this.tw(this.a2, { p: 0 }, 350)]);
+        this.destroy(this.child);
+        await this.cap(`<b>${e.parent.name} vẫn tồn tại.</b> Kế thừa <b>không phải sở hữu.</b>`, 1900);
+        await this.popIn([this.child]);
+        await this.all([this.tw(this.a1, { p: 1 }, 500), this.tw(this.a2, { p: 1 }, 500)]);
+      } },
+      { id: 'delParent', label: `Xóa ${e.parent.name} (thử xem!)`, run: async () => {
+        this.parent.shake = 2.6;
+        await this.tw(this.parent, { glow: 1 }, 300);
+        await this.cap(`${fa('fa-triangle-exclamation')} <b>${e.parent.name} là lớp cha</b> — xóa lớp cha <b>không</b> tự động xóa lớp con.<br>Đây chỉ là quan hệ "is-a" trong bản thiết kế.`, 2600, true);
+        await this.tw(this.parent, { glow: 0 }, 300);
+      } },
+    ]);
+    await this.cap('<b>Inheritance ≠ Composition.</b> Kế thừa không có nghĩa "sở hữu vòng đời".', 2000);
     this.finish();
   }
 }
@@ -856,27 +1086,29 @@ class InheritanceScene extends Scene {
 class RealizationScene extends Scene {
   setup() {
     const { vw, vh } = this.M, e = this.E;
-    this.iface = new Card({ x: vw * .5, y: vh * .17, w: 270, h: 122, color: e.color,
-      ico: e.iface.ico, title: e.iface.name, sub: 'giao diện · contract', tag: '«interface»',
-      rows: [{ t: e.method, hl: 0 }] });
-    this.i1 = new Card({ x: vw * .26, y: vh * .64, w: 258, h: 132, color: e.color1,
-      ico: e.i1.ico, title: e.i1.name, sub: e.method + ': ' + e.i1.how });
-    this.i2 = new Card({ x: vw * .74, y: vh * .64, w: 258, h: 132, color: e.color2,
-      ico: e.i2.ico, title: e.i2.name, sub: e.method + ': ' + e.i2.how });
+    const mob = this.M.vw < 700;
+    this.iface = new Card({ x: vw * .5, y: vh * (mob ? .17 : .22), w: 270,
+      color: e.color, ico: e.iface.ico, title: e.iface.name, sub: 'contract',
+      stereo: '«interface»', methods: [e.method] });
+    this.i1 = new Card({ x: vw * (mob ? .22 : .26), y: vh * (mob ? .6 : .66), w: 258, h: 100,
+      color: e.color1, ico: e.i1.ico, title: e.i1.name, sub: e.i1.sub, methods: [e.method] });
+    this.i2 = new Card({ x: vw * (mob ? .78 : .74), y: vh * (mob ? .6 : .66), w: 258, h: 100,
+      color: e.color2, ico: e.i2.ico, title: e.i2.name, sub: e.i2.sub, methods: [e.method] });
     this.a1 = { p: 0 }; this.a2 = { p: 0 };
     this.bg1 = { p: 0, text: '', color: '#D97706' };
     this.bg2 = { p: 0, text: '', color: '#D97706' };
   }
   drawLinks(c) {
-    connector(c, this.i1.x, this.i1.y - this.i1.h / 2, this.iface.x - 70, this.iface.y + this.iface.h / 2,
+    const off = this.M.vw < 700 ? 60 : 70;
+    connector(c, this.i1.x, this.i1.y - this.i1.h / 2, this.iface.x - off, this.iface.y + this.iface.h / 2,
       { progress: this.a1.p, color: this.E.color, dash: true, endMark: 'tri', mark: 20, label: '«implements»' });
-    connector(c, this.i2.x, this.i2.y - this.i2.h / 2, this.iface.x + 70, this.iface.y + this.iface.h / 2,
+    connector(c, this.i2.x, this.i2.y - this.i2.h / 2, this.iface.x + off, this.iface.y + this.iface.h / 2,
       { progress: this.a2.p, color: this.E.color, dash: true, endMark: 'tri', mark: 20, label: '«implements»' });
   }
   drawExtras(c) {
-    drawBadge(c, this.i1.x, this.i1.y - 112, this.bg1.text,
+    drawBadge(c, this.i1.x, this.i1.y - this.i1.h / 2 - 30, this.bg1.text,
       { color: this.bg1.color, alpha: this.bg1.p, scale: lerp(.6, 1, this.bg1.p) });
-    drawBadge(c, this.i2.x, this.i2.y - 112, this.bg2.text,
+    drawBadge(c, this.i2.x, this.i2.y - this.i2.h / 2 - 30, this.bg2.text,
       { color: this.bg2.color, alpha: this.bg2.p, scale: lerp(.6, 1, this.bg2.p) });
   }
   /** Chạy animation thực thi method: ⏳ theo cách riêng → ✓ */
@@ -903,21 +1135,25 @@ class RealizationScene extends Scene {
 
     await this.continueGate();
 
-    /* --- MÔ PHỎNG VÒNG ĐỜI --- */
-    await this.actions([{ id: 'del', kind: 'danger', label: fa('fa-trash-can') + ` Xóa ${e.i1.name}` }]);
-    await this.tw(this.a1, { p: 0 }, 350);
-    this.destroy(this.i1);
-    await this.runMethod(this.i2, this.bg2, e.i2.via);
-    await this.tw(this.bg2, { p: 0 }, 350);
-    await this.cap(`<b>${e.i2.name} vẫn ${e.method} bình thường</b> — Interface vẫn tồn tại.`, 1900);
-    await this.actions([{ id: 'reset', kind: 'primary', label: fa('fa-rotate-left') + ' Đặt lại' }]);
-    this.i1.visible = true; this.i1.alpha = 0; this.i1.scale = 0;
-    await this.popIn([this.i1]);
-    await this.tw(this.a1, { p: 1 }, 500);
-    await this.actions([{ id: 'delI', kind: 'danger', label: fa('fa-trash-can') + ` Xóa ${e.iface.name}` }]);
-    await this.all([this.tw(this.a1, { p: 0 }, 350), this.tw(this.a2, { p: 0 }, 350)]);
-    this.destroy(this.iface);
-    await this.cap('Interface chỉ là <b>bản thiết kế (contract)</b> —<br>nó <b>không sở hữu</b> các object hiện thực nó.', 2200);
+    /* --- MÔ PHỎNG VÒNG ĐỜI: các nút xóa hiện cùng lúc, tự chọn thứ tự --- */
+    await this.simulate([
+      { id: 'delI1', label: `Xóa ${e.i1.name}`, run: async () => {
+        await this.tw(this.a1, { p: 0 }, 350);
+        this.destroy(this.i1);
+        await this.runMethod(this.i2, this.bg2, e.i2.via);
+        await this.tw(this.bg2, { p: 0 }, 350);
+        await this.cap(`<b>${e.i2.name} vẫn ${e.method} bình thường</b> — Interface vẫn tồn tại.`, 1900);
+        await this.popIn([this.i1]);
+        await this.tw(this.a1, { p: 1 }, 500);
+      } },
+      { id: 'delIface', label: `Xóa ${e.iface.name}`, run: async () => {
+        await this.all([this.tw(this.a1, { p: 0 }, 350), this.tw(this.a2, { p: 0 }, 350)]);
+        this.destroy(this.iface);
+        await this.cap('Interface chỉ là <b>bản thiết kế (contract)</b> —<br>nó <b>không sở hữu</b> các object hiện thực nó.', 2200);
+        await this.popIn([this.iface]);
+        await this.all([this.tw(this.a1, { p: 1 }, 500), this.tw(this.a2, { p: 1 }, 500)]);
+      } },
+    ]);
     this.finish();
   }
 }
@@ -934,23 +1170,29 @@ const SCENE_DEFS = [
     qsub: 'Xem câu chuyện, rồi bấm <b>Tiếp tục</b> để tự tay XÓA object và quan sát.',
     examples: [
       { label: 'Teacher & Course',
-        a: { name: 'Teacher',  sub: 'class · giảng viên', ico: ICO.teacher,   color: '#3B82F6' },
-        b: { name: 'Course',   sub: 'class · môn học',    ico: ICO.bookOpen,  color: '#2563EB' } },
+        a: { name: 'Teacher',  sub: 'giảng viên', ico: ICO.teacher,   color: '#3B82F6',
+             attrs: ['name'], methods: ['teach()'] },
+        b: { name: 'Course',   sub: 'môn học',    ico: ICO.bookOpen,  color: '#2563EB',
+             attrs: ['title'], methods: ['enroll()'] } },
       { label: 'Doctor & Patient',
-        a: { name: 'Doctor',   sub: 'class · bác sĩ',     ico: ICO.doctor,    color: '#0EA5E9' },
-        b: { name: 'Patient',  sub: 'class · bệnh nhân',  ico: ICO.patient,   color: '#0284C7' } },
+        a: { name: 'Doctor',   sub: 'bác sĩ',     ico: ICO.doctor,    color: '#0EA5E9',
+             attrs: ['name'], methods: ['examine()'] },
+        b: { name: 'Patient',  sub: 'bệnh nhân',  ico: ICO.patient,   color: '#0284C7',
+             attrs: ['record'], methods: ['visit()'] } },
       { label: 'Customer & Order',
-        a: { name: 'Customer', sub: 'class · khách hàng', ico: ICO.customer,  color: '#0891B2' },
-        b: { name: 'Order',    sub: 'class · đơn hàng',   ico: ICO.boxOpen,   color: '#0E7490' } },
+        a: { name: 'Customer', sub: 'khách hàng', ico: ICO.customer,  color: '#0891B2',
+             attrs: ['name'], methods: ['placeOrder()'] },
+        b: { name: 'Order',    sub: 'đơn hàng',   ico: ICO.boxOpen,   color: '#0E7490',
+             attrs: ['id'], methods: ['total()'] } },
     ],
     bullets: [
       ['fa-key', 'Keyword', '<b>“biết” (knows)</b> — liên hệ lâu dài giữa hai đối tượng ngang hàng.'],
-      ['fa-circle-question', 'Câu hỏi nhận biết', '<b>A có “biết” B như một ngườii quen?</b>'],
+      ['fa-circle-question', 'Câu hỏi nhận biết', '<b>A có “biết” B như một người quen?</b>'],
       ['fa-lightbulb', 'Khi nào dùng?', 'Teacher dạy Course, Doctor khám Patient, Customer đặt Order… hai bên độc lập nhưng có giao tiếp.'],
       ['fa-triangle-exclamation', 'Sai lầm thường gặp', 'Nghĩ rằng một bên “sở hữu” bên kia — Association <b>không có chủ</b>.'],
       ['fa-pen-ruler', 'Ký hiệu UML', 'Đường liền (solid line), có thể thêm mũi tên chỉ chiều đi.'],
     ],
-    tip: 'Hai ngườii <b>quen nhau</b>. Không ai sở hữu ai. Một ngườii đi xa — ngườii kia vẫn sống bình thường.',
+    tip: 'Hai người <b>quen nhau</b>. Không ai sở hữu ai. Một người đi xa — người kia vẫn sống bình thường.',
   },
   {
     cls: DependencyScene, icon: 'fa-plug', color: '#F59E0B', coupling: 1,
@@ -959,14 +1201,20 @@ const SCENE_DEFS = [
     qsub: 'Dùng xong rồi sao? Xem câu chuyện rồi bấm <b>Tiếp tục</b> để thử XÓA.',
     examples: [
       { label: 'Printer & Report', doing: 'đang in…', story: 'Printer nhận một yêu cầu in…',
-        tool: { name: 'Printer',   sub: 'class · máy in',     ico: ICO.print,     color: '#F59E0B' },
-        item: { name: 'Report',    sub: 'class · báo cáo',    ico: ICO.fileLines, color: '#64748B' } },
+        tool: { name: 'Printer',   sub: 'máy in',     ico: ICO.print,     color: '#F59E0B',
+                methods: ['print(r: Report)'] },
+        item: { name: 'Report',    sub: 'báo cáo',    ico: ICO.fileLines, color: '#64748B',
+                attrs: ['pages'] } },
       { label: 'Compiler & SourceCode', doing: 'đang dịch…', story: 'Compiler nhận mã nguồn để biên dịch…',
-        tool: { name: 'Compiler',  sub: 'class · trình dịch', ico: ICO.gears,     color: '#D97706' },
-        item: { name: 'SourceCode',sub: 'class · mã nguồn',   ico: ICO.fileCode,  color: '#64748B' } },
+        tool: { name: 'Compiler',  sub: 'trình dịch', ico: ICO.gears,     color: '#D97706',
+                methods: ['compile(src)'] },
+        item: { name: 'SourceCode',sub: 'mã nguồn',   ico: ICO.fileCode,  color: '#64748B',
+                attrs: ['lines'] } },
       { label: 'ATM & BankCard', doing: 'đang đọc thẻ…', story: 'ATM nhận thẻ để xác thực…',
-        tool: { name: 'ATM',       sub: 'class · máy rút tiền', ico: ICO.cashReg,    color: '#B45309' },
-        item: { name: 'BankCard',  sub: 'class · thẻ ngân hàng', ico: ICO.creditCard, color: '#64748B' } },
+        tool: { name: 'ATM',       sub: 'máy rút tiền', ico: ICO.cashReg,    color: '#B45309',
+                methods: ['verify(card)'] },
+        item: { name: 'BankCard',  sub: 'thẻ ngân hàng', ico: ICO.creditCard, color: '#64748B',
+                attrs: ['number'] } },
     ],
     bullets: [
       ['fa-key', 'Keyword', '<b>“dùng tạm” (uses)</b> — B chỉ xuất hiện như <b>tham số (parameter)</b> hoặc biến cục bộ của A.'],
@@ -983,27 +1231,33 @@ const SCENE_DEFS = [
     question: '“Nếu <b>xóa tổng thể</b>, các phần tử có biến mất không?”',
     qsub: 'Xem câu chuyện rồi bấm <b>Tiếp tục</b> để tự tay xóa và kiểm chứng.',
     examples: [
-      { label: 'Faculty & Teachers', base: 'Teacher', memberSub: 'giảng viên', memberColor: '#0D9488',
+      { label: 'Faculty & Teachers', base: 'Teacher',
+        memberColor: '#0D9488', memberAttrs: ['name'], memberMethods: ['teach()'],
         memberIcos: [ICO.teacher, ICO.teacher, ICO.teacherTie],
-        owner:  { name: 'Faculty',   sub: 'khoa',        ico: ICO.building, color: '#10B981' },
+        owner:  { name: 'Faculty',   sub: 'khoa',        ico: ICO.building, color: '#10B981',
+                  methods: ['add(t: Teacher)'] },
         owner2: { name: 'Faculty 2', sub: 'khoa khác',   ico: ICO.school,   color: '#059669' },
         moved: 'Các Teacher sang <b>Khoa khác</b> làm việc bình thường — hoàn toàn độc lập.' },
-      { label: 'Team & Players', base: 'Player', memberSub: 'cầu thủ', memberColor: '#0F766E',
+      { label: 'Team & Players', base: 'Player',
+        memberColor: '#0F766E', memberAttrs: ['name'], memberMethods: ['play()'],
         memberIcos: [ICO.user, ICO.user, ICO.user],
-        owner:  { name: 'Team',   sub: 'đội bóng',    ico: ICO.users, color: '#14B8A6' },
+        owner:  { name: 'Team',   sub: 'đội bóng',    ico: ICO.users, color: '#14B8A6',
+                  methods: ['draft(p: Player)'] },
         owner2: { name: 'Team 2', sub: 'đội khác',    ico: ICO.users, color: '#0D9488' },
-        moved: 'Các cầu thủ sang <b>đội khác</b> thi đấu bình thường — đội tan, ngườii còn.' },
-      { label: 'Library & Books', base: 'Book', memberSub: 'sách', memberColor: '#047857',
+        moved: 'Các cầu thủ sang <b>đội khác</b> thi đấu bình thường — đội tan, người còn.' },
+      { label: 'Library & Books', base: 'Book',
+        memberColor: '#047857', memberAttrs: ['title'], memberMethods: ['open()'],
         memberIcos: [ICO.book, ICO.book, ICO.bookOpen],
-        owner:  { name: 'Library',   sub: 'thư viện',      ico: ICO.landmark, color: '#059669' },
+        owner:  { name: 'Library',   sub: 'thư viện',      ico: ICO.landmark, color: '#059669',
+                  methods: ['lend(b: Book)'] },
         owner2: { name: 'Library 2', sub: 'thư viện mới',  ico: ICO.landmark, color: '#10B981' },
-        moved: 'Sách được chuyển sang <b>thư viện mới</b> — vòng đờii sách không phụ thuộc thư viện.' },
+        moved: 'Sách được chuyển sang <b>thư viện mới</b> — vòng đời sách không phụ thuộc thư viện.' },
     ],
     bullets: [
-      ['fa-key', 'Keyword', '<b>“có” (has-a) lỏng lẻo</b> — A nhóm các B, nhưng B có <b>vòng đờii riêng</b>.'],
+      ['fa-key', 'Keyword', '<b>“có” (has-a) lỏng lẻo</b> — A nhóm các B, nhưng B có <b>vòng đời riêng</b>.'],
       ['fa-circle-question', 'Câu hỏi nhận biết', '<b>B còn tồn tại khi A biến mất không?</b> Có → Aggregation.'],
       ['fa-lightbulb', 'Khi nào dùng?', 'Khoa – Giảng viên, Đội – Cầu thủ, Thư viện – Sách.'],
-      ['fa-triangle-exclamation', 'Sai lầm thường gặp', 'Trông rất giống Composition — điểm khác nằm ở <b>vòng đờii của phần tử</b>: độc lập hay gắn chết.'],
+      ['fa-triangle-exclamation', 'Sai lầm thường gặp', 'Trông rất giống Composition — điểm khác nằm ở <b>vòng đời của phần tử</b>: độc lập hay gắn chết.'],
       ['fa-pen-ruler', 'Ký hiệu UML', 'Hình thoi rỗng (hollow diamond) ◇— đặt ở phía “tổng thể”.'],
     ],
     tip: 'Nếu công ty <b>phá sản</b>, nhân viên vẫn <b>đi xin việc nơi khác</b>. ⇒ Aggregation.',
@@ -1011,21 +1265,27 @@ const SCENE_DEFS = [
   {
     cls: CompositionScene, icon: 'fa-cubes', color: '#EF4444', coupling: 5,
     vi: 'HỢP THÀNH', en: 'Composition',
-    question: '“Cái này có thực sự <b>sở hữu vòng đờii</b> cái kia không?”',
+    question: '“Cái này có thực sự <b>sở hữu vòng đời</b> cái kia không?”',
     qsub: '“Sở hữu” ở đây nghĩa là gì? Xem câu chuyện rồi bấm <b>Tiếp tục</b>.',
     examples: [
       { label: 'Course & Syllabus',
-        whole: { name: 'Course',   sub: 'môn học · tổng thể',   ico: ICO.bookOpen, color: '#EF4444' },
-        part:  { name: 'Syllabus', sub: 'đề cương · bộ phận',   ico: ICO.fileSign, color: '#B91C1C' } },
+        whole: { name: 'Course',   sub: 'môn học',  ico: ICO.bookOpen, color: '#EF4444',
+                 attrs: ['title'], methods: ['getSyllabus()'] },
+        part:  { name: 'Syllabus', sub: 'đề cương', ico: ICO.fileSign, color: '#B91C1C',
+                 methods: ['export()'] } },
       { label: 'House & Room',
-        whole: { name: 'House',    sub: 'ngôi nhà · tổng thể',  ico: ICO.house,    color: '#DC2626' },
-        part:  { name: 'Room',     sub: 'căn phòng · bộ phận',  ico: ICO.doorOpen, color: '#991B1B' } },
+        whole: { name: 'House',    sub: 'ngôi nhà', ico: ICO.house,    color: '#DC2626',
+                 attrs: ['address'] },
+        part:  { name: 'Room',     sub: 'căn phòng', ico: ICO.doorOpen, color: '#991B1B',
+                 methods: ['clean()'] } },
       { label: 'Order & OrderLine',
-        whole: { name: 'Order',    sub: 'đơn hàng · tổng thể',  ico: ICO.invoice,  color: '#E11D48' },
-        part:  { name: 'OrderLine',sub: 'dòng chi tiết · bộ phận', ico: ICO.listUl, color: '#9F1239' } },
+        whole: { name: 'Order',    sub: 'đơn hàng', ico: ICO.invoice,  color: '#E11D48',
+                 attrs: ['id'], methods: ['total()'] },
+        part:  { name: 'OrderLine',sub: 'dòng chi tiết', ico: ICO.listUl, color: '#9F1239',
+                 attrs: ['qty'], methods: ['subtotal()'] } },
     ],
     bullets: [
-      ['fa-key', 'Keyword', '<b>“sở hữu” (owns)</b> — phần (part) <b>gắn chết vòng đờii</b> với tổng thể (whole).'],
+      ['fa-key', 'Keyword', '<b>“sở hữu” (owns)</b> — phần (part) <b>gắn chết vòng đời</b> với tổng thể (whole).'],
       ['fa-circle-question', 'Câu hỏi nhận biết', '<b>B có mất ý nghĩa khi A biến mất?</b> Có → Composition.'],
       ['fa-lightbulb', 'Khi nào dùng?', 'Course – Syllabus, Nhà – Phòng, Đơn hàng – Dòng chi tiết hóa đơn.'],
       ['fa-triangle-exclamation', 'Sai lầm thường gặp', 'Xem mọi “has-a” đều là Composition — hãy kiểm tra: phần đó <b>tồn tại riêng được không</b>?'],
@@ -1040,17 +1300,20 @@ const SCENE_DEFS = [
     qsub: 'Đọc thành câu “A LÀ B” trong đầu — rồi xem câu chuyện.',
     examples: [
       { label: 'Person → Teacher', color: '#7C3AED', color2: '#6D28D9',
-        parent: { name: 'Person', ico: ICO.user, rows: ['name', 'age'], color: '#8B5CF6' },
-        child:  { name: 'Teacher',    ico: ICO.teacher,    new: 'salary' },
-        grand:  { name: 'Assistant',  ico: ICO.teacherTie, new: 'hỗ trợ giờ thực hành' } },
+        parent: { name: 'Person', ico: ICO.user, color: '#8B5CF6',
+                  attrs: ['name', 'age'], methods: ['introduce()'] },
+        child:  { name: 'Teacher',    ico: ICO.teacher,    newAttr: 'salary', method: 'teach()' },
+        grand:  { name: 'Assistant',  ico: ICO.teacherTie, newMethod: 'assist()' } },
       { label: 'Animal → Dog', color: '#8B5CF6', color2: '#7C3AED',
-        parent: { name: 'Animal', ico: ICO.paw, rows: ['name', 'age'], color: '#8B5CF6' },
-        child:  { name: 'Dog',      ico: ICO.dog, new: 'breed' },
-        grand:  { name: 'Puppy',    ico: ICO.paw, new: 'cần bú mẹ' } },
+        parent: { name: 'Animal', ico: ICO.paw, color: '#8B5CF6',
+                  attrs: ['name', 'age'], methods: ['speak()'] },
+        child:  { name: 'Dog',      ico: ICO.dog, newAttr: 'breed', method: 'bark()' },
+        grand:  { name: 'Puppy',    ico: ICO.paw, newMethod: 'nap()' } },
       { label: 'Vehicle → Car', color: '#6D28D9', color2: '#5B21B6',
-        parent: { name: 'Vehicle', ico: ICO.truck, rows: ['brand', 'speed'], color: '#8B5CF6' },
-        child:  { name: 'Car',         ico: ICO.car,      new: 'seat' },
-        grand:  { name: 'ElectricCar', ico: ICO.charging, new: 'sạc pin' } },
+        parent: { name: 'Vehicle', ico: ICO.truck, color: '#8B5CF6',
+                  attrs: ['brand', 'speed'], methods: ['start()'] },
+        child:  { name: 'Car',         ico: ICO.car,      newAttr: 'seat', method: 'drive()' },
+        grand:  { name: 'ElectricCar', ico: ICO.charging, newMethod: 'charge()' } },
     ],
     bullets: [
       ['fa-key', 'Keyword', '<b>“là một” (is-a)</b> — lớp con (subclass) thừa hưởng lớp cha (superclass).'],
@@ -1069,16 +1332,16 @@ const SCENE_DEFS = [
     examples: [
       { label: 'Loginable', method: 'login()', color: '#DB2777', color1: '#BE185D', color2: '#9D174D',
         iface: { name: 'Loginable', ico: ICO.key },
-        i1: { name: 'Teacher', ico: ICO.teacher,  how: 'email + mật khẩu', via: 'qua email…' },
-        i2: { name: 'Student', ico: ICO.graduate, how: 'SSO sinh viên',    via: 'qua SSO…' } },
+        i1: { name: 'Teacher', ico: ICO.teacher,  sub: 'bằng email + mật khẩu', via: 'qua email…' },
+        i2: { name: 'Student', ico: ICO.graduate, sub: 'bằng SSO sinh viên',    via: 'qua SSO…' } },
       { label: 'Payable', method: 'pay()', color: '#E11D48', color1: '#BE123C', color2: '#9F1239',
         iface: { name: 'Payable', ico: ICO.wallet },
-        i1: { name: 'CreditCard', ico: ICO.creditCard, how: 'quẹt thẻ POS', via: 'quẹt thẻ…' },
-        i2: { name: 'MomoWallet', ico: ICO.qrcode,     how: 'quét mã QR',   via: 'quét QR…' } },
+        i1: { name: 'CreditCard', ico: ICO.creditCard, sub: 'quẹt thẻ POS', via: 'quẹt thẻ…' },
+        i2: { name: 'MomoWallet', ico: ICO.qrcode,     sub: 'quét mã QR',   via: 'quét QR…' } },
       { label: 'Flyable', method: 'fly()', color: '#C026D3', color1: '#A21CAF', color2: '#86198F',
         iface: { name: 'Flyable', ico: ICO.feather },
-        i1: { name: 'Bird',  ico: ICO.dove,  how: 'đập cánh',         via: 'đập cánh…' },
-        i2: { name: 'Plane', ico: ICO.plane, how: 'động cơ phản lực', via: 'bật động cơ…' } },
+        i1: { name: 'Bird',  ico: ICO.dove,  sub: 'đập cánh',         via: 'đập cánh…' },
+        i2: { name: 'Plane', ico: ICO.plane, sub: 'động cơ phản lực', via: 'bật động cơ…' } },
     ],
     bullets: [
       ['fa-key', 'Keyword', '<b>“hiện thực” (implements)</b> — lớp cam kết theo một <b>interface (contract)</b>.'],
@@ -1087,7 +1350,7 @@ const SCENE_DEFS = [
       ['fa-triangle-exclamation', 'Sai lầm thường gặp', 'Kỳ vọng nhận sẵn code như kế thừa — interface chỉ cho <b>cam kết</b>, cách làm do từng lớp tự viết.'],
       ['fa-pen-ruler', 'Ký hiệu UML', 'Nét đứt + mũi tên rỗng ⇢▷ kèm «implements».'],
     ],
-    tip: 'Giống <b>bằng lái xe</b>. Ai có bằng đều phải biết lái — nhưng mỗi ngườii lái một kiểu.',
+    tip: 'Giống <b>bằng lái xe</b>. Ai có bằng đều phải biết lái — nhưng mỗi người lái một kiểu.',
   },
 ];
 
@@ -1102,9 +1365,9 @@ const TREE = {
 };
 const RESULTS = {
   association: { i: 0, name: 'LIÊN KẾT',    en: 'Association',  ico: 'fa-handshake',      color: '#3B82F6', line: 'Hai đối tượng quen nhau, sống độc lập — không ai sở hữu ai.' },
-  dependency:  { i: 1, name: 'PHỤ THUỘC',   en: 'Dependency',   ico: 'fa-plug',           color: '#F59E0B', line: 'Chỉ dùng tạm thờii — mượn xong là trả, không giữ lại.' },
+  dependency:  { i: 1, name: 'PHỤ THUỘC',   en: 'Dependency',   ico: 'fa-plug',           color: '#F59E0B', line: 'Chỉ dùng tạm thời — mượn xong là trả, không giữ lại.' },
   aggregation: { i: 2, name: 'KẾT TẬP',     en: 'Aggregation',  ico: 'fa-people-group',   color: '#10B981', line: 'A nhóm các B nhưng B sống độc lập — nhóm tan, phần tử vẫn ở lại.' },
-  composition: { i: 3, name: 'HỢP THÀNH',   en: 'Composition',  ico: 'fa-cubes',          color: '#EF4444', line: 'A sở hữu B theo vòng đờii — sống cùng, chết cùng.' },
+  composition: { i: 3, name: 'HỢP THÀNH',   en: 'Composition',  ico: 'fa-cubes',          color: '#EF4444', line: 'A sở hữu B theo vòng đời — sống cùng, chết cùng.' },
   inheritance: { i: 4, name: 'KẾ THỪA',     en: 'Inheritance',  ico: 'fa-dna',            color: '#8B5CF6', line: 'A là một B — thừa hưởng toàn bộ từ lớp cha.' },
   realization: { i: 5, name: 'HIỆN THỰC HÓA', en: 'Realization', ico: 'fa-file-contract',  color: '#DB2777', line: 'A cam kết theo một interface — cùng cam kết, khác cách làm.' },
 };
@@ -1120,11 +1383,11 @@ class DecisionTree {
       <div class="kicker"><span class="dot" style="background:#0EA5E9;box-shadow:0 0 0 4px rgba(14,165,233,.18)"></span> TỔNG KẾT · CHỌN ĐÚNG QUAN HỆ</div>
       <h1 style="font-size:clamp(1.9rem,4.4vw,3rem);font-weight:800">CÂY QUYẾT ĐỊNH <span style="color:var(--text-sub);font-size:.55em">(Decision Tree)</span></h1>
       <div class="big-question" style="border-left-color:#0EA5E9">“Quan hệ giữa A và B là loại nào trong 6 loại?”
-        <small>Trả lờii tối đa 5 câu Có/Không — cùng lắm 30 giây là ra đáp án.</small>
+        <small>Trả lời tối đa 5 câu Có/Không — cùng lắm 30 giây là ra đáp án.</small>
       </div>
       <div class="tree-wrap"><div class="tree-intro">
         <div class="lead">${fa('fa-route')}</div>
-        <p>Bạn có hai lớp <b>A</b> và <b>B</b>. Hãy trả lờii lần lượt các câu hỏi — cây sẽ dẫn bạn đến đúng mối quan hệ.</p>
+        <p>Bạn có hai lớp <b>A</b> và <b>B</b>. Hãy trả lời lần lượt các câu hỏi — cây sẽ dẫn bạn đến đúng mối quan hệ.</p>
         <button class="btn btn-primary" style="--accent:#0EA5E9">${fa('fa-play')} Bắt đầu</button>
       </div></div>`;
     $('.btn', this.root).addEventListener('click', () => {
@@ -1264,7 +1527,7 @@ const UI = {
         <button class="stage-hint hidden"></button>
         <div class="stage-start hidden">
           <div class="lead">${fa('fa-brain')}</div>
-          <p>Đọc kỹ câu hỏi lớn phía trên → xem câu chuyện → bấm <b>Tiếp tục</b> để tự tay <b>XÓA object</b> và quan sát vòng đờii.</p>
+          <p>Đọc kỹ câu hỏi lớn phía trên → xem câu chuyện → bấm <b>Tiếp tục</b> để tự tay <b>XÓA object</b> (mọi lựa chọn hiện ra cùng lúc, thứ tự tùy ý) và quan sát vòng đời.</p>
           <button class="btn btn-primary btn-big btn-start" style="--accent:${d.color}">${fa('fa-play')} Xem animation</button>
         </div>
       </div>

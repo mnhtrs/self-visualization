@@ -162,7 +162,7 @@ body::after  { width: 420px; height: 420px; bottom: -160px; left: 18%; backgroun
 .scene-head h1 { font-size: clamp(1.9rem, 4.4vw, 3rem); font-weight: 800; letter-spacing: .01em; }
 .scene-head h1 .en { color: var(--text-sub); font-weight: 600; font-size: .55em; }
 
-/* Câu hỏi mở đầu — cực lớn, ép ngườii học dừng lại suy nghĩ */
+/* Câu hỏi mở đầu — cực lớn, ép người học dừng lại suy nghĩ */
 .big-question {
   margin: 18px 0 16px; padding: 22px 26px;
   background: var(--surface); border: 1px solid var(--line);
@@ -230,10 +230,11 @@ body::after  { width: 420px; height: 420px; bottom: -160px; left: 18%; backgroun
 .caption.show { opacity: 1; transform: translate(-50%, 0); }
 .caption.warn { border-color: #F59E0B; color: #B45309; background: color-mix(in srgb, #FDE68A 25%, var(--surface)); }
 
-/* dãy nút hành động của vòng đờii object: Tiếp tục / Xóa / Đặt lại… */
+/* dãy nút hành động của vòng đời object: Tiếp tục / Xóa (nhiều nút cùng lúc)… */
 .stage-actions {
   position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
-  display: flex; gap: 10px; z-index: 7;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; z-index: 7;
+  width: max-content; max-width: 94%;
 }
 /* gợi ý cuộn xuống sau khi hoàn thành (đặt cạnh trên để không đè nút) */
 .stage-hint {
@@ -313,7 +314,7 @@ body::after  { width: 420px; height: 420px; bottom: -160px; left: 18%; backgroun
 }
 @keyframes flowDown { to { transform: translateY(0); } }
 
-/* chip tóm tắt câu đã trả lờii */
+/* chip tóm tắt câu đã trả lời */
 .tree-chip {
   align-self: center; display: flex; gap: 10px; align-items: center;
   background: var(--surface-2); border: 1px dashed var(--line);
@@ -344,9 +345,10 @@ body::after  { width: 420px; height: 420px; bottom: -160px; left: 18%; backgroun
 /* ---------- 10. RESPONSIVE ---------- */
 @media (max-width: 1020px) {
   .layout { grid-template-columns: 1fr; gap: 18px; padding: 18px 18px 40px; }
-  .sidebar { position: static; }
+  /* min-width:0 để hàng nav ngang không đẩy lố khung (lỗi tràn ngang trên điện thoại) */
+  .sidebar { position: static; min-width: 0; }
   .sidebar-title { display: none; }
-  #navList { flex-direction: row; overflow-x: auto; padding-bottom: 8px; gap: 8px; scrollbar-width: thin; }
+  #navList { flex-direction: row; overflow-x: auto; padding-bottom: 8px; gap: 8px; scrollbar-width: thin; min-width: 0; max-width: 100%; }
   .nav-item { flex: 0 0 auto; width: auto; padding: 10px 12px; background: var(--surface); border-color: var(--line); }
   .nav-item:hover { transform: none; }
   .nav-text span { display: none; }
@@ -356,5 +358,9 @@ body::after  { width: 420px; height: 420px; bottom: -160px; left: 18%; backgroun
   .brand-sub { display: none; }
   .stage { aspect-ratio: 34 / 43; }   /* canvas dọc hơn trên điện thoại */
   .progress-label { display: none; }
-  .caption { bottom: 64px; }
+  /* caption & nút nhỏ gọn hơn để không đè lên nhau và không tràn */
+  .caption { bottom: 58px; padding: 8px 16px; font-size: .8rem; }
+  .stage-actions { bottom: 12px; gap: 8px; }
+  .stage-actions .btn { padding: 8px 12px; font-size: .8rem; }
+  .stage-hint { top: 10px; font-size: .78rem; padding: 6px 14px; }
 }
